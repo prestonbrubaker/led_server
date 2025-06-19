@@ -5,12 +5,98 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LED Strip Control</title>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
-        select, button { padding: 10px; margin: 10px; font-size: 16px; }
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            text-align: center;
+            padding: 40px;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            max-width: 500px;
+            width: 90%;
+        }
+        h1 {
+            font-size: 2.2em;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        #current-mode {
+            color: #ffd700;
+            font-weight: bold;
+        }
+        select {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border-radius: 8px;
+            border: none;
+            background: #ffffff;
+            color: #333;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        select:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(45deg, #ff6b6b, #ff8e53);
+            color: white;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 15px;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        .error {
+            color: #ff4d4d;
+            margin-top: 15px;
+            font-size: 14px;
+            display: none;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .container {
+            animation: fadeIn 0.5s ease-out;
+        }
     </style>
     <script>
         function updateMode() {
-            const mode = document.getElementById('mode').value;
+            const modeSelect = document.getElementById('mode');
+            const updateButton = document.querySelector('button');
+            const errorMessage = document.getElementById('error-message');
+            const mode = modeSelect.value;
+
+            // Disable button and clear previous error
+            updateButton.disabled = true;
+            errorMessage.style.display = 'none';
+
             fetch('/update', {
                 method: 'POST',
                 headers: {
@@ -21,22 +107,38 @@
             .then(response => response.json())
             .then(data => {
                 if (data.message) {
+                    document.getElementById('current-mode').textContent = mode.replace('-', ' ').title();
                     alert(data.message);
-                    window.location.reload();
                 } else {
-                    alert(data.error);
+                    errorMessage.textContent = data.error || 'An error occurred';
+                    errorMessage.style.display = 'block';
                 }
+            })
+            .catch(error => {
+                errorMessage.textContent = 'Failed to connect to server';
+                errorMessage.style.display = 'block';
+            })
+            .finally(() => {
+                updateButton.disabled = false;
             });
         }
+
+        // Capitalize each word for display
+        String.prototype.title = function() {
+            return this.replace(/\b\w/g, c => c.toUpperCase());
+        };
     </script>
 </head>
 <body>
-    <h1>Current Mode: <span id="current-mode">{{ mode }}</span></h1>
-    <select id="mode">
-        {% for m in modes %}
-        <option value="{{ m }}" {% if m == mode %}selected{% endif %}>{{ m.replace('-', ' ').title() }}</option>
-        {% endfor %}
-    </select>
-    <button onclick="updateMode()">Update Mode</button>
+    <div class="container">
+        <h1>Current Mode: <span id="current-mode">{{ mode.replace('-', ' ').title() }}</span></h1>
+        <select id="mode">
+            {% for m in modes %}
+            <option value="{{ m }}" {% if m == mode %}selected{% endif %}>{{ m.replace('-', ' ').title() }}</option>
+            {% endfor %}
+        </select>
+        <button onclick="updateMode()">Update Mode</button>
+        <div id="error-message" class="error"></div>
+    </div>
 </body>
 </html>
