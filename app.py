@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, jsonify, request
 import json
 import os
 
@@ -7,11 +7,17 @@ app = Flask(__name__)
 # File to store the JSON data
 json_file_path = 'data.json'
 
-# List of valid modes
+# List of valid modes (matched to ESP8266 code)
 VALID_MODES = [
-    'off', 'rainbow-flow', 'constant-red', 'color-chase', 'twinkle',
-    'fire', 'ocean-wave', 'pulse-green', 'rainbow-sparkle', 'comet',
-    'theater-chase', 'gradient-cycle', 'random-flash', 'breathing-blue'
+    'off',
+    'rainbow-flow',
+    'constant-red',
+    'proletariat-crackle',
+    'bourgeois-brilliance',
+    'austere-enlightenment',
+    'zaphod-galactic-groove',
+    'max-aquarian-flow',
+    'lunar-rebellion-pulse'
 ]
 
 # Function to read the mode from the JSON file
@@ -57,7 +63,7 @@ def update_data():
 @app.route('/')
 def index():
     data = read_json()
-    return render_template('index.html', mode=data['mode'], modes=VALID_MODES)
+    return app.send_static_file('index.html')
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
