@@ -3,16 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Change Number</title>
+    <title>LED Strip Control</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+        select, button { padding: 10px; margin: 10px; font-size: 16px; }
+    </style>
     <script>
-        function updateNumber() {
-            const number = document.getElementById('number').value;
+        function updateMode() {
+            const mode = document.getElementById('mode').value;
             fetch('/update', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ number: parseInt(number) })
+                body: JSON.stringify({ mode: mode })
             })
             .then(response => response.json())
             .then(data => {
@@ -27,8 +31,12 @@
     </script>
 </head>
 <body>
-    <h1>Current Number: <span id="current-number">{{ number }}</span></h1>
-    <input type="number" id="number" min="1" max="3" value="{{ number }}">
-    <button onclick="updateNumber()">Update Number</button>
+    <h1>Current Mode: <span id="current-mode">{{ mode }}</span></h1>
+    <select id="mode">
+        {% for m in modes %}
+        <option value="{{ m }}" {% if m == mode %}selected{% endif %}>{{ m.replace('-', ' ').title() }}</option>
+        {% endfor %}
+    </select>
+    <button onclick="updateMode()">Update Mode</button>
 </body>
 </html>
