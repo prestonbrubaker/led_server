@@ -87,6 +87,10 @@ void loop() {
       maxAquarianFlow();
     } else if (currentMode == "lunar-rebellion-pulse") {
       lunarRebellionPulse();
+    } else if (currentMode == "proletariat-pulse") {
+      proletariatPulse();
+    } else if (currentMode == "bourgeois-blaze") {
+      bourgeoisBlaze();
     }
     strip.show();
     lastUpdate = millis();
@@ -286,5 +290,64 @@ void lunarRebellionPulse() {
       pulses[random(NUM_LEDS)] = random(50, 100);
     }
     lastPulse = millis();
+  }
+}
+
+void proletariatPulse() {
+  static uint8_t ripples[NUM_LEDS] = {0};
+  static int wavePos = 0;
+  static int direction = 1; // 1 = right, -1 = left
+  static unsigned long lastRipple = 0;
+
+  if (millis() - lastRipple >= 25) {
+    // Fade all LEDs
+    for (int i = 0; i < NUM_LEDS; i++) {
+      ripples[i] = max(0, ripples[i] - 10); // Smooth fade
+      strip.setPixelColor(i, strip.Color(ripples[i], 0, 0)); // Red only
+    }
+    // Add new ripple
+    ripples[wavePos] = random(150, 255); // Bright ripple peak
+    // Add random sparkles
+    if (random(100) < 10) { // 10% chance per frame
+      int spark = random(NUM_LEDS);
+      ripples[spark] = random(200, 255); // Bright sparkle
+    }
+    // Move ripple
+    wavePos += direction;
+    if (wavePos >= NUM_LEDS - 1 || wavePos <= 0) {
+      direction = -direction; // Reverse at ends
+    }
+    lastRipple = millis();
+  }
+}
+
+void bourgeoisBlaze() {
+  static uint8_t clusters[NUM_LEDS] = {0};
+  static int pos = 0;
+  static unsigned long lastWave = 0;
+
+  if (millis() - lastWave >= 30) {
+    // Fade all LEDs
+    for (int i = 0; i < NUM_LEDS; i++) {
+      clusters[i] = max(0, clusters[i] - 12); // Smooth fade
+      uint8_t r = clusters[i] * (i % 3 == 0); // Gold
+      uint8_t g = clusters[i] * (i % 3 == 0) * 215 / 255; // Gold
+      uint8_t b = clusters[i] * (i % 3 == 1) * 180 / 255; // Emerald
+      if (i % 3 == 2) { // Crimson
+        r = clusters[i];
+        g = b = clusters[i] / 4; // Subtle red dominance
+      }
+      strip.setPixelColor(i, strip.Color(r, g, b));
+    }
+    // Add new cluster
+    clusters[pos] = 255;
+    clusters[(pos + NUM_LEDS / 2) % NUM_LEDS] = 255; // Opposite side for symmetry
+    // Add random sparkles
+    if (random(100) < 8) { // 8% chance per frame
+      int spark = random(NUM_LEDS);
+      clusters[spark] = random(180, 255); // Bright sparkle
+    }
+    pos = (pos + 1) % NUM_LEDS; // Move cluster
+    lastWave = millis();
   }
 }
