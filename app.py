@@ -17,7 +17,9 @@ VALID_MODES = [
     'austere-enlightenment',
     'zaphod-galactic-groove',
     'max-aquarian-flow',
-    'lunar-rebellion-pulse'
+    'lunar-rebellion-pulse',
+    'proletariat-pulse',
+    'bourgeois-blaze'
 ]
 
 # Function to read the mode from the JSON file
