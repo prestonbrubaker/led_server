@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 import json
 import os
 
@@ -65,7 +65,7 @@ def update_data():
 @app.route('/')
 def index():
     data = read_json()
-    return app.send_static_file('index.html')
+    return render_template('index.html')
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

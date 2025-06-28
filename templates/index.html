@@ -31,8 +31,12 @@
             position: relative;
             animation: float 4s ease-in-out infinite;
         }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
         h1 {
-            font-family: 'Press Start+2P', cursive;
+            font-family: 'Press+Start+2P', cursive;
             font-size: 1.8em;
             margin-bottom: 20px;
             text-shadow: 0 0 10px #ff4081;
@@ -42,6 +46,7 @@
             color: #39ff14;
             font-family: 'Orbitron', sans-serif;
             font-weight: bold;
+            margin-bottom: 20px;
         }
         select {
             width: 100%;
@@ -70,7 +75,7 @@
             cursor: pointer;
             transition: transform 0.3s, box-shadow 0.3s;
             margin-top: 20px;
-            font-family: 'Press Start+2P', cursive;
+            font-family: 'Press+Start+2P', cursive;
         }
         button:hover {
             transform: scale(1.1);
@@ -89,7 +94,49 @@
             margin-top: 15px;
             font-size: 14px;
             text-shadow: 0 0 5px #ff1744;
-            display: none cyberspace?';
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Galactic LED Control-o-Tron</h1>
+        <p>Current Mode: <span id="current-mode">Loading...</span></p>
+        <select id="mode">
+            <option value="off">Off</option>
+            <option value="rainbow-flow">Rainbow Flow</option>
+            <option value="constant-red">Constant Red</option>
+            <option value="proletariat-crackle">Proletariat Crackle</option>
+            <option value="bourgeois-brilliance">Bourgeois Brilliance</option>
+            <option value="austere-enlightenment">Austere Enlightenment</option>
+            <option value="zaphod-galactic-groove">Zaphod Galactic Groove</option>
+            <option value="max-aquarian-flow">Max Aquarian Flow</option>
+            <option value="lunar-rebellion-pulse">Lunar Rebellion Pulse</option>
+            <option value="proletariat-pulse">Proletariat Pulse</option>
+            <option value="bourgeois-blaze">Bourgeois Blaze</option>
+        </select>
+        <button onclick="updateMode()">Update Mode</button>
+        <div id="error-message" class="error"></div>
+    </div>
+    <script>
+        // Create background stars (placeholder)
+        function createStars() {
+            // Add star animation if desired; for now, empty to avoid errors
+            console.log("Creating stars...");
+        }
+
+        // Fetch current mode
+        function fetchCurrentMode() {
+            const currentMode = document.getElementById('current-mode');
+            const errorMessage = document.getElementById('error-message');
+
+            fetch('http://192.168.1.126:5000/mode')
+                .then(response => response.text())
+                .then(mode => {
+                    currentMode.textContent = mode.replace(/-/g, ' ').title();
+                })
+                .catch(error => {
+                    errorMessage.textContent = 'Failed to fetch current mode!';
                     errorMessage.style.display = 'block';
                 });
         }
@@ -115,12 +162,12 @@
                         document.getElementById('current-mode').textContent = mode.replace(/-/g, ' ').title();
                         alert(`Mode set to ${mode.replace(/-/g, ' ').title()}! Don't forget your towel!`);
                     } else {
-                        errorMessage.textContent = data.error || 'Something's gone terribly wrong!';
+                        errorMessage.textContent = data.error || 'Something went wrong!';
                         errorMessage.style.display = 'block';
                     }
                 })
                 .catch(error => {
-                    errorMessage.textContent = 'Failed to connect to the Heart of Gold server!';
+                    errorMessage.textContent = 'Failed to connect to the server!';
                     errorMessage.style.display = 'block';
                 })
                 .finally(() => {
