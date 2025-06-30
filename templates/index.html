@@ -100,7 +100,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>Galactic LED Control-o-Tron</h1>
+        <h1>Galactic LED Control Center</h1>
         <p>Current Mode: <span id="current-mode">Loading...</span></p>
         <select id="mode">
             <option value="off">Off</option>
@@ -114,6 +114,7 @@
             <option value="lunar-rebellion-pulse">Lunar Rebellion Pulse</option>
             <option value="proletariat-pulse">Proletariat Pulse</option>
             <option value="bourgeois-blaze">Bourgeois Blaze</option>
+            <option value="top_species_glow">Top Species Glow</option>
         </select>
         <button onclick="updateMode()">Update Mode</button>
         <div id="error-message" class="error"></div>
@@ -121,7 +122,6 @@
     <script>
         // Create background stars (placeholder)
         function createStars() {
-            // Add star animation if desired; for now, empty to avoid errors
             console.log("Creating stars...");
         }
 
