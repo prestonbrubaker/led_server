@@ -31,12 +31,8 @@
             position: relative;
             animation: float 4s ease-in-out infinite;
         }
-        @keyframes float {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
-        }
         h1 {
-            font-family: 'Press+Start+2P', cursive;
+            font-family: 'Press Start 2P', cursive;
             font-size: 1.8em;
             margin-bottom: 20px;
             text-shadow: 0 0 10px #ff4081;
@@ -46,7 +42,6 @@
             color: #39ff14;
             font-family: 'Orbitron', sans-serif;
             font-weight: bold;
-            margin-bottom: 20px;
         }
         select {
             width: 100%;
@@ -75,7 +70,7 @@
             cursor: pointer;
             transition: transform 0.3s, box-shadow 0.3s;
             margin-top: 20px;
-            font-family: 'Press+Start+2P', cursive;
+            font-family: 'Press Start 2P', cursive;
         }
         button:hover {
             transform: scale(1.1);
@@ -96,48 +91,74 @@
             text-shadow: 0 0 5px #ff1744;
             display: none;
         }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            z-index: -1;
+        }
     </style>
 </head>
 <body>
+    <canvas id="stars"></canvas>
     <div class="container">
-        <h1>Galactic LED Control Center</h1>
-        <p>Current Mode: <span id="current-mode">Loading...</span></p>
-        <select id="mode">
-            <option value="off">Off</option>
-            <option value="rainbow-flow">Rainbow Flow</option>
-            <option value="constant-red">Constant Red</option>
-            <option value="proletariat-crackle">Proletariat Crackle</option>
-            <option value="bourgeois-brilliance">Bourgeois Brilliance</option>
-            <option value="austere-enlightenment">Austere Enlightenment</option>
-            <option value="zaphod-galactic-groove">Zaphod Galactic Groove</option>
-            <option value="max-aquarian-flow">Max Aquarian Flow</option>
-            <option value="lunar-rebellion-pulse">Lunar Rebellion Pulse</option>
-            <option value="proletariat-pulse">Proletariat Pulse</option>
-            <option value="bourgeois-blaze">Bourgeois Blaze</option>
-            <option value="top_species_glow">Top Species Glow</option>
-        </select>
-        <button onclick="updateMode()">Update Mode</button>
-        <div id="error-message" class="error"></div>
+        <h1>Galactic LED Control-o-Tron</h1>
+        <p>Current Mode: <span id="current-mode">Off</span></p>
+        <select id="mode"></select>
+        <button onclick="updateMode()">Engage Hyperdrive</button>
+        <p id="error-message" class="error"></p>
     </div>
+
     <script>
-        // Create background stars (placeholder)
-        function createStars() {
-            console.log("Creating stars...");
-        }
+        // Modes list - sync with server
+        const modes = [
+            'off',
+            'rainbow-flow',
+            'constant-red',
+            'proletariat-crackle',
+            'soma-haze',
+            'loonie-freefall',
+            'bokanovsky-burst',
+            'total-perspective-vortex',
+            'golgafrincham-drift',
+            'bistromathics-surge',
+            'groks-dissolution',
+            'newspeak-shrink',
+            'nolite-te-bastardes',
+            'infinite-improbability-drive',
+            'big-brother-glare',
+            'replicant-retirement',
+            'water-brother-bond',
+            'hypnopaedia-hum',
+            'vogon-poetry-pulse',
+            'thought-police-flash',
+            'electric-sheep-dream'
+        ];
+
+        // Populate mode select
+        const modeSelect = document.getElementById('mode');
+        modes.forEach(mode => {
+            const option = document.createElement('option');
+            option.value = mode;
+            option.textContent = mode.replace(/-/g, ' ').title();
+            modeSelect.appendChild(option);
+        });
 
         // Fetch current mode
         function fetchCurrentMode() {
-            const currentMode = document.getElementById('current-mode');
-            const errorMessage = document.getElementById('error-message');
-
             fetch('http://192.168.1.126:5000/mode')
                 .then(response => response.text())
                 .then(mode => {
-                    currentMode.textContent = mode.replace(/-/g, ' ').title();
+                    document.getElementById('current-mode').textContent = mode.replace(/-/g, ' ').title();
+                    modeSelect.value = mode;
                 })
                 .catch(error => {
-                    errorMessage.textContent = 'Failed to fetch current mode!';
-                    errorMessage.style.display = 'block';
+                    console.error('Error fetching mode:', error);
                 });
         }
 
@@ -162,12 +183,12 @@
                         document.getElementById('current-mode').textContent = mode.replace(/-/g, ' ').title();
                         alert(`Mode set to ${mode.replace(/-/g, ' ').title()}! Don't forget your towel!`);
                     } else {
-                        errorMessage.textContent = data.error || 'Something went wrong!';
+                        errorMessage.textContent = data.error || 'Something\'s gone terribly wrong!';
                         errorMessage.style.display = 'block';
                     }
                 })
                 .catch(error => {
-                    errorMessage.textContent = 'Failed to connect to the server!';
+                    errorMessage.textContent = 'Failed to connect to the Heart of Gold server!';
                     errorMessage.style.display = 'block';
                 })
                 .finally(() => {
@@ -179,6 +200,24 @@
         String.prototype.title = function() {
             return this.replace(/\b\w/g, c => c.toUpperCase());
         };
+
+        // Create stars background
+        function createStars() {
+            const canvas = document.getElementById('stars');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            const ctx = canvas.getContext('2d');
+
+            for (let i = 0; i < 200; i++) {
+                const x = Math.random() * canvas.width;
+                const y = Math.random() * canvas.height;
+                const radius = Math.random() * 1.5;
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, Math.PI * 2);
+                ctx.fillStyle = '#fff';
+                ctx.fill();
+            }
+        }
 
         // Initialize
         window.onload = () => {
