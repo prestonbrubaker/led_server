@@ -108,57 +108,31 @@
     <canvas id="stars"></canvas>
     <div class="container">
         <h1>Galactic LED Control-o-Tron</h1>
-        <p>Current Mode: <span id="current-mode">Off</span></p>
-        <select id="mode"></select>
+        <p>Current Mode: <span id="current-mode">{{ mode.replace('-', ' ').title() }}</span></p>
+        <select id="mode">
+            {% for mode in valid_modes %}
+                <option value="{{ mode }}" {% if mode == mode %}selected{% endif %}>
+                    {{ mode.replace('-', ' ').title() }}
+                </option>
+            {% endfor %}
+        </select>
         <button onclick="updateMode()">Engage Hyperdrive</button>
         <p id="error-message" class="error"></p>
     </div>
 
     <script>
-        // Modes list - sync with server
-        const modes = [
-            'off',
-            'rainbow-flow',
-            'constant-red',
-            'proletariat-crackle',
-            'soma-haze',
-            'loonie-freefall',
-            'bokanovsky-burst',
-            'total-perspective-vortex',
-            'golgafrincham-drift',
-            'bistromathics-surge',
-            'groks-dissolution',
-            'newspeak-shrink',
-            'nolite-te-bastardes',
-            'infinite-improbability-drive',
-            'big-brother-glare',
-            'replicant-retirement',
-            'water-brother-bond',
-            'hypnopaedia-hum',
-            'vogon-poetry-pulse',
-            'thought-police-flash',
-            'electric-sheep-dream'
-        ];
-
-        // Populate mode select
-        const modeSelect = document.getElementById('mode');
-        modes.forEach(mode => {
-            const option = document.createElement('option');
-            option.value = mode;
-            option.textContent = mode.replace(/-/g, ' ').title();
-            modeSelect.appendChild(option);
-        });
-
         // Fetch current mode
         function fetchCurrentMode() {
             fetch('http://192.168.1.126:5000/mode')
                 .then(response => response.text())
                 .then(mode => {
-                    document.getElementById('current-mode').textContent = mode.replace(/-/g, ' ').title();
-                    modeSelect.value = mode;
+                    document.getElementById('current-mode').textContent = mode.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                    document.getElementById('mode').value = mode;
                 })
                 .catch(error => {
                     console.error('Error fetching mode:', error);
+                    document.getElementById('error-message').textContent = 'Failed to connect to the Heart of Gold server!';
+                    document.getElementById('error-message').style.display = 'block';
                 });
         }
 
@@ -180,14 +154,15 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.message) {
-                        document.getElementById('current-mode').textContent = mode.replace(/-/g, ' ').title();
-                        alert(`Mode set to ${mode.replace(/-/g, ' ').title()}! Don't forget your towel!`);
+                        document.getElementById('current-mode').textContent = mode.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                        alert(`Mode set to ${mode.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}! Don't forget your towel!`);
                     } else {
                         errorMessage.textContent = data.error || 'Something\'s gone terribly wrong!';
                         errorMessage.style.display = 'block';
                     }
                 })
                 .catch(error => {
+                    console.error('Error updating mode:', error);
                     errorMessage.textContent = 'Failed to connect to the Heart of Gold server!';
                     errorMessage.style.display = 'block';
                 })
@@ -195,11 +170,6 @@
                     updateButton.disabled = false;
                 });
         }
-
-        // Capitalize each word
-        String.prototype.title = function() {
-            return this.replace(/\b\w/g, c => c.toUpperCase());
-        };
 
         // Create stars background
         function createStars() {
