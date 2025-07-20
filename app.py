@@ -75,7 +75,7 @@ def update_data():
 @app.route('/')
 def index():
     data = read_json()
-    return render_template('index.html')
+    return render_template('index.html', mode=data['mode'], valid_modes=VALID_MODES)
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
