@@ -13,13 +13,24 @@ VALID_MODES = [
     'rainbow-flow',
     'constant-red',
     'proletariat-crackle',
-    'bourgeois-brilliance',
-    'austere-enlightenment',
-    'zaphod-galactic-groove',
-    'max-aquarian-flow',
-    'lunar-rebellion-pulse',
-    'proletariat-pulse',
-    'top_species_glow'  # Added to match ESP-01 mode
+    'soma-haze',
+    'loonie-freefall',
+    'bokanovsky-burst',
+    'total-perspective-vortex',
+    'golgafrincham-drift',
+    'bistromathics-surge',
+    'groks-dissolution',
+    'newspeak-shrink',
+    'nolite-te-bastardes',
+    'infinite-improbability-drive',
+    'big-brother-glare',
+    'replicant-retirement',
+    'water-brother-bond',
+    'hypnopaedia-hum',
+    'vogon-poetry-pulse',
+    'thought-police-flash',
+    'electric-sheep-dream',
+    'top_species_glow'  # Retained to match existing functionality
 ]
 
 # Function to read the JSON data
