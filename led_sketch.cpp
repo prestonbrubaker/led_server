@@ -156,10 +156,53 @@ void resetModeState() {
 
 void rainbowFlow() {
     static uint16_t hue = 0;
-    for (int i = 0; i < NUM_LEDS; i++) {
-        strip.setPixelColor(i, strip.ColorHSV(hue + (i * 65536L / NUM_LEDS)));
+    static uint8_t sparkles[NUM_LEDS] = {0};
+    static uint8_t sparkleColors[NUM_LEDS][3] = {{0}};
+    static unsigned long lastUpdate = 0;
+
+    unsigned long currentTime = millis();
+    if (currentTime - lastUpdate >= random(15, 30)) {
+        for (int i = 0; i < NUM_LEDS; i++) {
+            sparkles[i] = max(0, sparkles[i] - 20);
+            uint8_t r, g, b;
+            if (sparkles[i] > 0) {
+                r = sparkleColors[i][0];
+                g = sparkleColors[i][1];
+                b = sparkleColors[i][2];
+            } else {
+                uint16_t h = hue + (i * 65536L / NUM_LEDS); // Full rainbow cycle
+                uint8_t s = 255; // Maximum saturation for deep colors
+                uint8_t v = 100 + (sin((hue + i * 100) * 0.01) + 1) * 50; // Brightness 100-200
+                uint32_t c = strip.ColorHSV(h, s, v);
+                r = (c >> 16) & 0xFF;
+                g = (c >> 8) & 0xFF;
+                b = c & 0xFF;
+            }
+            strip.setPixelColor(i, strip.Color(r, g, b));
+        }
+        if (random(100) < 5) {
+            for (int j = 0; j < random(1, 4); j++) {
+                int spark = random(NUM_LEDS);
+                sparkles[spark] = random(180, 255);
+                uint8_t sparkType = random(3);
+                if (sparkType == 0) {
+                    sparkleColors[spark][0] = sparkles[spark]; // White
+                    sparkleColors[spark][1] = sparkles[spark];
+                    sparkleColors[spark][2] = sparkles[spark];
+                } else if (sparkType == 1) { // Gold
+                    sparkleColors[spark][0] = sparkles[spark];
+                    sparkleColors[spark][1] = sparkles[spark] * 200 / 255;
+                    sparkleColors[spark][2] = sparkles[spark] * 50 / 255;
+                } else { // Neon pink
+                    sparkleColors[spark][0] = sparkles[spark] * 255 / 255;
+                    sparkleColors[spark][1] = sparkles[spark] * 105 / 255;
+                    sparkleColors[spark][2] = sparkles[spark] * 180 / 255;
+                }
+            }
+        }
+        hue += 512;
+        lastUpdate = currentTime;
     }
-    hue += 256;
 }
 
 void setLedsRed() {
@@ -178,132 +221,146 @@ void proletariatCrackle() {
     static uint8_t intensities[NUM_LEDS] = {0};
     static unsigned long lastCrackle = 0;
 
-    if (millis() - lastCrackle >= 50) {
+    unsigned long currentTime = millis();
+    if (currentTime - lastCrackle >= random(30, 100)) {
         for (int i = 0; i < NUM_LEDS; i++) {
-            intensities[i] = max(0, intensities[i] - 10);
-            uint8_t r = min(255, 200 + intensities[i]);
-            uint8_t g = intensities[i] / 8;
+            intensities[i] = max((uint8_t)0, (uint8_t)(intensities[i] - random(5, 15)));
+            uint8_t r = min(255, 255 * intensities[i] / 255);
+            uint8_t g = intensities[i] / 10;
             strip.setPixelColor(i, strip.Color(r, g, 0));
         }
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 8; i++) {
             int led = random(NUM_LEDS);
             intensities[led] = random(50, 255);
         }
-        lastCrackle = millis();
+        lastCrackle = currentTime;
     }
 }
 
 void somaHaze() {
-    static uint16_t offset = 0;
-    for (int i = 0; i < NUM_LEDS; i++) {
-        float blend = (sin((float)(i * 2 + offset) * 0.05) + 1.0) / 2.0;
-        uint8_t r = (uint8_t)(255 * blend + 200 * (1 - blend)); // Baby pink to lilac
-        uint8_t g = (uint8_t)(192 * blend + 162 * (1 - blend));
-        uint8_t b = (uint8_t)(203 * blend + 200 * (1 - blend));
-        strip.setPixelColor(i, strip.Color(r, g, b)); // Fixed typo from previous
-    }
-    offset += 2;
-}
+    static uint16_t pinkOffset = 0;
+    static uint16_t blueOffset = 0;
+    static unsigned long lastMorph = 0;
 
-void somaHaze() { // Note: This had a small typo in setPixelColor in my internal note, but in code it's correct.
-    static uint16_t offset = 0;
-    for (int i = 0; i < NUM_LEDS; i++) {
-        float blend = (sin((i + offset) * 20.05f) + 1.f) / 2.f;
-        uint8_t r = static_cast<uint8_t>(250 * blend + 200 * (1 - blend)); // Baby pink (255, 182, 203) to lilac (200, 162, 200)
-        uint8_t g = static_cast<uint8_t>(182 * blend + 162 * (1 - blend));
-        uint8_t b = static_cast<uint8_t>(203 * blend + 200 * (1 - blend));
-        strip.setPixelColor(i, strip.Color(r, g, b));
+    if (millis() - lastMorph >= 20) {
+        for (int i = 0; i < NUM_LEDS; i++) {
+            float pinkBlend = (sin((float)(i + pinkOffset) * 0.08f) + 1.0f) / 2.0f;
+            float blueBlend = (cos((float)(i + blueOffset) * 0.06f) + 1.0f) / 2.0f;
+            uint8_t r = (uint8_t)(255 * pinkBlend + 173 * blueBlend);
+            uint8_t g = (uint8_t)(192 * pinkBlend + 216 * blueBlend);
+            uint8_t b = (uint8_t)(203 * pinkBlend + 230 * blueBlend);
+            float morphFactor = (sin((float)i * 0.1f + (float)pinkOffset * 0.05f) + 1.0f) / 2.0f;
+            r = (uint8_t)(r * morphFactor + (255 - r) * (1 - morphFactor) / 2);
+            b = (uint8_t)(b * (1 - morphFactor) + (255 - b) * morphFactor / 2);
+            strip.setPixelColor(i, strip.Color(r, g, b));
+        }
+        pinkOffset += 2;
+        blueOffset -= 3;
+        lastMorph = millis();
     }
-    offset += 2;
 }
 
 void loonieFreefall() {
-    static uint8_t stars[NUM_LEDS] = {0};
-    static uint16_t hue = 0;
-    static unsigned long lastUpdate = 0;
+    static uint8_t comets[10][3] = {0}; // pos, length, speed
+    static unsigned long lastFall = 0;
 
-    if (millis() - lastUpdate >= 40) {
+    if (millis() - lastFall >= 25) {
         for (int i = 0; i < NUM_LEDS; i++) {
-            stars[i] = max(0, stars[i] - 8);
-            uint32_t baseColor = strip.ColorHSV(hue + (i * 100), 255, 64); // Galactic blues and purples for mission control
-            uint8_t r = (baseColor >> 16) & 0xFF;
-            uint8_t g = (baseColor >> 8) & 0xFF;
-            uint8_t b = baseColor & 0xFF;
-            if (stars[i] > 0) {
-                r = min(255, r + stars[i]);
-                g = min(255, g + stars[i]);
-                b = min(255, b + stars[i]);
+            strip.setPixelColor(i, strip.Color(0, 0, 20)); // Galactic background
+        }
+        for (int c = 0; c < 10; c++) {
+            if (comets[c][0] == 0 && random(100) < 8) {
+                comets[c][0] = 1; // Start new comet
+                comets[c][1] = random(5, 15); // Length
+                comets[c][2] = random(2, 5); // Speed
             }
-            strip.setPixelColor(i, strip.Color(r, g, b));
-        }
-        // Add falling "loonie" stars for freefall, shifting down the strip
-        if (random(100) < 10) {
-            stars[0] = random(150, 255);
-        }
-        for (int i = NUM_LEDS - 1; i > 0; i--) {
-            if (stars[i - 1] > 0) {
-                stars[i] = stars[i - 1] - 10;
-                stars[i - 1] = 0;
+            if (comets[c][0] > 0) {
+                for (int t = 0; t < comets[c][1]; t++) {
+                    int pos = comets[c][0] + t;
+                    if (pos < NUM_LEDS) {
+                        uint8_t intensity = 255 - t * (255 / comets[c][1]);
+                        uint8_t r = intensity;
+                        uint8_t g = intensity / 2;
+                        uint8_t b = intensity;
+                        strip.setPixelColor(pos, strip.Color(r, g, b));
+                    }
+                }
+                comets[c][0] += comets[c][2];
+                if (comets[c][0] + comets[c][1] >= NUM_LEDS) {
+                    comets[c][0] = 0;
+                }
             }
         }
-        hue += 50;
-        lastUpdate = millis();
+        lastFall = millis();
     }
 }
 
 void bokanovskyBurst() {
-    static uint8_t baseIntensities[NUM_LEDS] = {0};
-    static unsigned long lastBurst = 0;
-    static int burstCounter = 0;
+    static int balls[8] = {0, 40, 80, 120, 160, 200, 240, 280};
+    static int directions[8] = {2, -2, 3, -3, 2, -2, 4, -4};
+    static unsigned long lastBounce = 0;
 
-    if (millis() - lastBurst >= 50) {
+    if (millis() - lastBounce >= 20) {
         for (int i = 0; i < NUM_LEDS; i++) {
-            baseIntensities[i] = max(0, baseIntensities[i] - 5);
-            uint8_t r = 128 + baseIntensities[i] / 2; // Uniform greyish base
-            uint8_t g = r;
-            uint8_t b = r;
-            strip.setPixelColor(i, strip.Color(r, g, b));
+            strip.setPixelColor(i, strip.Color(50, 50, 50)); // Uniform base
         }
-        if (burstCounter % 10 == 0) { // Periodic "bursts" for Bokanovsky process, systematic and identical groups
-            int groupSize = random(20, 40);
-            int start = random(NUM_LEDS - groupSize);
-            uint8_t burstR = random(255);
-            uint8_t burstG = random(255);
-            uint8_t burstB = random(255);
-            for (int j = 0; j < groupSize; j++) {
-                int idx = start + j;
-                baseIntensities[idx] = 255;
-                strip.setPixelColor(idx, strip.Color(burstR, burstG, burstB));
+        for (int b = 0; b < 8; b++) {
+            int pos = balls[b];
+            if (pos >= 0 && pos < NUM_LEDS) {
+                strip.setPixelColor(pos, strip.Color(255, 255, 0));
+                for (int t = 1; t < 10; t++) {
+                    int trail1 = pos - t * directions[b] / abs(directions[b]);
+                    int trail2 = pos + t * directions[b] / abs(directions[b]);
+                    uint8_t intensity = 255 - t * 25;
+                    if (trail1 >= 0 && trail1 < NUM_LEDS) strip.setPixelColor(trail1, strip.Color(intensity, intensity / 2, 0));
+                    if (trail2 >= 0 && trail2 < NUM_LEDS) strip.setPixelColor(trail2, strip.Color(intensity, intensity / 2, 0));
+                }
+            }
+            balls[b] += directions[b];
+            if (balls[b] <= 0 || balls[b] >= NUM_LEDS - 1) {
+                directions[b] = -directions[b];
+                for (int burst = -20; burst <= 20; burst++) {
+                    int burstPos = balls[b] + burst;
+                    if (burstPos >= 0 && burstPos < NUM_LEDS) {
+                        uint8_t br = random(200, 255);
+                        uint8_t bg = random(100, 200);
+                        uint8_t bb = random(0, 50);
+                        strip.setPixelColor(burstPos, strip.Color(br, bg, bb));
+                    }
+                }
             }
         }
-        burstCounter++;
-        lastBurst = millis();
+        lastBounce = millis();
     }
 }
 
 void totalPerspectiveVortex() {
-    static uint16_t vortexHue = 0;
-    static uint8_t saturations[NUM_LEDS] = {0};
-    static unsigned long lastSwirl = 0;
+    static uint16_t marqueePos = 0;
+    static unsigned long lastMarquee = 0;
 
-    if (millis() - lastSwirl >= 20) {
+    if (millis() - lastMarquee >= 15) {
         for (int i = 0; i < NUM_LEDS; i++) {
-            saturations[i] = min(255, saturations[i] + 10); // Build ultra-saturated colors
-            uint32_t color = strip.ColorHSV(vortexHue + i * 200, 255, saturations[i]);
+            uint16_t h = (marqueePos + i * 10) % 65536;
+            uint32_t color = strip.ColorHSV(h, 255, 255);
             strip.setPixelColor(i, color);
         }
-        if (random(100) < 5) { // Random "awesome" resets for Hitchhiker vibe, infinite perspective
-            memset(saturations, 0, sizeof(saturations));
-            vortexHue = random(65536); // Total randomness
+        marqueePos += 256;
+        if (random(100) < 10) {
+            int slingPos = random(NUM_LEDS);
+            for (int s = 0; s < 50; s++) {
+                int pos = (slingPos + s * 5) % NUM_LEDS;
+                strip.setPixelColor(pos, strip.ColorHSV(random(65536), 255, 255));
+            }
         }
-        vortexHue += 300;
-        lastSwirl = millis();
+        lastMarquee = millis();
     }
 }
 
 void golgafrinchamDrift() {
     static uint8_t comets[NUM_LEDS] = {0};
-    static int cometPos = 0;
+    static int cometPositions[8] = {0, 37, 75, 112, 150, 187, 225, 262};
+    static int cometSpeeds[8] = {1, 2, 1, 3, 2, 1, 4, 2};
+    static int cometDirections[8] = {1, 1, 1, 1, 1, 1, 1, 1};
     static unsigned long lastSurge = 0;
 
     if (millis() - lastSurge >= 35) {
@@ -314,15 +371,18 @@ void golgafrinchamDrift() {
             uint8_t b = 0;
             strip.setPixelColor(i, strip.Color(r, g, b));
         }
-        // Add comet surges
-        if (random(100) < 15) {
-            comets[cometPos] = 255;
-            for (int tail = 1; tail < 5; tail++) {
-                int tailPos = (cometPos - tail + NUM_LEDS) % NUM_LEDS;
-                comets[tailPos] = 255 - tail * 50;
+        for (int c = 0; c < 8; c++) {
+            cometPositions[c] = (cometPositions[c] + cometSpeeds[c] * cometDirections[c] + NUM_LEDS) % NUM_LEDS;
+            comets[cometPositions[c]] = 255;
+            for (int tail = 1; tail < 8; tail++) {
+                int tailPos = (cometPositions[c] - tail * cometSpeeds[c] * cometDirections[c] + NUM_LEDS) % NUM_LEDS;
+                comets[tailPos] = max(comets[tailPos], (uint8_t)(255 - tail * 30));
+            }
+            if (random(100) < 2) {
+                cometDirections[c] = -cometDirections[c];
+                cometSpeeds[c] = random(1, 5);
             }
         }
-        cometPos = (cometPos + 1) % NUM_LEDS;
         lastSurge = millis();
     }
 }
@@ -341,7 +401,7 @@ void bistromathicsSurge() {
             for (int t = 1; t < 6; t++) {
                 int trailPos = ballPositions[b] - t * ballDirections[b] * 2;
                 if (trailPos >= 0 && trailPos < NUM_LEDS) {
-                    intensities[trailPos] = max(intensities[trailPos], 255 - t * 40);
+                    intensities[trailPos] = max(intensities[trailPos], (uint8_t)(255 - t * 40));
                 }
             }
             ballPositions[b] += ballDirections[b] * 3;
@@ -360,78 +420,116 @@ void bistromathicsSurge() {
 }
 
 void groksDissolution() {
-    static uint8_t waves[NUM_LEDS] = {0};
-    static int wavePos = 0;
-    static unsigned long lastWave = 0;
+    static uint8_t slings[4] = {0, 75, 150, 225};
+    static int slingDirs[4] = {5, -4, 6, -5};
+    static unsigned long lastSling = 0;
 
-    if (millis() - lastWave >= 40) {
+    if (millis() - lastSling >= 30) {
         for (int i = 0; i < NUM_LEDS; i++) {
-            waves[i] = max(0, waves[i] - 8);
-            uint8_t g = waves[i]; // Green for Grok, fading for dissolution/deep thought
-            uint8_t r = g / 4;
-            uint8_t b = g / 4;
-            strip.setPixelColor(i, strip.Color(r, g, b));
+            strip.setPixelColor(i, strip.Color(0, 20, 0)); // Deep green base
         }
-        // Slow, contemplative wave
-        waves[wavePos] = 200;
-        waves[(wavePos + 1) % NUM_LEDS] = 150;
-        wavePos = (wavePos + 1) % NUM_LEDS;
-        lastWave = millis();
+        for (int s = 0; s < 4; s++) {
+            int pos = slings[s];
+            if (pos >= 0 && pos < NUM_LEDS) {
+                strip.setPixelColor(pos, strip.Color(50, 255, 50));
+                for (int t = 1; t < 15; t++) {
+                    int trail = pos - t * slingDirs[s] / abs(slingDirs[s]);
+                    if (trail >= 0 && trail < NUM_LEDS) {
+                        uint8_t intensity = 200 - t * 13;
+                        strip.setPixelColor(trail, strip.Color(20, intensity, 20));
+                    }
+                }
+            }
+            slings[s] += slingDirs[s];
+            if (slings[s] <= 0 || slings[s] >= NUM_LEDS - 1) {
+                slingDirs[s] = -slingDirs[s];
+                int rippleCenter = slings[s];
+                for (int r = 0; r < 30; r++) {
+                    int left = rippleCenter - r;
+                    int right = rippleCenter + r;
+                    if (left >= 0) strip.setPixelColor(left, strip.Color(100, 255, 100));
+                    if (right < NUM_LEDS) strip.setPixelColor(right, strip.Color(100, 255, 100));
+                }
+            }
+        }
+        lastSling = millis();
     }
 }
 
 void newspeakShrink() {
     static uint8_t intensities[NUM_LEDS] = {0};
-    static int shrinkPos = NUM_LEDS / 2;
-    static bool shrinking = true;
+    static int leftPos = 0;
+    static int rightPos = NUM_LEDS - 1;
+    static bool converging = true;
     static unsigned long lastShrink = 0;
 
     if (millis() - lastShrink >= 30) {
         for (int i = 0; i < NUM_LEDS; i++) {
             intensities[i] = max(0, intensities[i] - 10);
-            uint8_t r = intensities[i] * (i % 3 == 0 ? 1 : 0); // Reds, greys, blacks shrinking
+            uint8_t r = intensities[i] * (i % 3 == 0 ? 0.5 : 0);
             uint8_t g = intensities[i] * (i % 3 == 1 ? 0.5 : 0);
-            uint8_t b = intensities[i] * (i % 3 == 2 ? 0.5 : 0);
+            uint8_t b = intensities[i]; // Blues and grays shrinking
             strip.setPixelColor(i, strip.Color(r, g, b));
         }
-        // Shrink animation towards center
-        if (shrinking) {
-            intensities[shrink + shrinkPos] = 255;
-            intensities[shrinkPos - shrinkPos] = 255; wait, fixed: for (int d = 0; d < 10; d++) {
-                int left = shrinkPos - d;
-                int right = shrinkPos + d;
-                if (left >= 0) intensities[left] = 255 - d * 20;
-                if (right < NUM_LEDS) intensities[right] = 255 - d * 20;
+        if (converging) {
+            for (int d = 0; d < 10; d++) {
+                if (leftPos + d < NUM_LEDS) intensities[leftPos + d] = (uint8_t)(255 - d * 20);
+                if (rightPos - d >= 0) intensities[rightPos - d] = (uint8_t)(255 - d * 20);
             }
-            shrinkPos -= 5;
-            if (shrinkPos <= 0) shrinking = false;
+            leftPos += 5;
+            rightPos -= 5;
+            if (leftPos >= rightPos) {
+                converging = false;
+            }
         } else {
-            shrinkPos += 5;
-            if (shrinkPos >= NUM_LEDS / 2) shrinking = true;
+            for (int d = 0; d < 10; d++) {
+                if (leftPos - d >= 0) intensities[leftPos - d] = (uint8_t)(255 - d * 20);
+                if (rightPos + d < NUM_LEDS) intensities[rightPos + d] = (uint8_t)(255 - d * 20);
+            }
+            leftPos -= 5;
+            rightPos += 5;
+            if (leftPos <= 0 || rightPos >= NUM_LEDS - 1) {
+                converging = true;
+            }
         }
         lastShrink = millis();
     }
 }
 
 void noliteTeBastardes() {
-    static uint16_t offset = 0;
-    static unsigned long lastMove = 0;
+    static int slingPositions[6] = {0, 50, 100, 150, 200, 250};
+    static int slingSpeeds[6] = {4, -5, 6, -4, 5, -6};
+    static unsigned long lastSling = 0;
 
-    if (millis() - lastMove >= 35) {
+    if (millis() - lastSling >= 25) {
         for (int i = 0; i < NUM_LEDS; i++) {
-            float wave = (sin((float)(i + offset) * 0.1f) + 1.0f) / 2.0f; // Captivating movement, reds for Handmaid's Tale theme
-            uint8_t r = 200 * wave + 100;
-            uint8_t g = 50 * (1 - wave);
-            uint8_t b = 50 * (1 - wave);
-            strip.setPixelColor(i, strip.Color(r, g, b));
+            strip.setPixelColor(i, strip.Color(20, 0, 0)); // Dark red base
         }
-        offset += 3;
-        // Add random "resistance" flashes
-        if (random(100) < 5) {
-            int pos = random(NUM_LEDS);
-            strip.setPixelColor(pos, strip.Color(255, 255, 255));
+        for (int s = 0; s < 6; s++) {
+            int pos = slingPositions[s];
+            if (pos >= 0 && pos < NUM_LEDS) {
+                strip.setPixelColor(pos, strip.Color(255, 100, 0));
+                for (int t = 1; t < 12; t++) {
+                    int trail = pos - t * slingSpeeds[s] / abs(slingSpeeds[s]);
+                    if (trail >= 0 && trail < NUM_LEDS) {
+                        uint8_t intensity = 220 - t * 18;
+                        strip.setPixelColor(trail, strip.Color(intensity, intensity / 3, 0));
+                    }
+                }
+            }
+            slingPositions[s] += slingSpeeds[s];
+            if (slingPositions[s] <= 0 || slingPositions[s] >= NUM_LEDS - 1) {
+                slingSpeeds[s] = -slingSpeeds[s];
+                int burstCenter = slingPositions[s];
+                for (int b = -15; b <= 15; b++) {
+                    int burstPos = burstCenter + b;
+                    if (burstPos >= 0 && burstPos < NUM_LEDS) {
+                        strip.setPixelColor(burstPos, strip.Color(255, random(50, 150), 0));
+                    }
+                }
+            }
         }
-        lastMove = millis();
+        lastSling = millis();
     }
 }
 
@@ -476,98 +574,138 @@ void bigBrotherGlare() {
 }
 
 void replicantRetirement() {
-    static uint8_t blades[NUM_LEDS] = {0};
-    static int bladePos = 0;
-    static unsigned long lastHunt = 0;
-
-    if (millis() - lastHunt >= 30) {
-        for (int i = 0; i < NUM_LEDS; i++) {
-            blades[i] = max(0, blades[i] - 15);
-            uint8_t r = blades[i] / 2;
-            uint8_t g = blades[i] / 2;
-            uint8_t b = blades[i]; // Blue for DADES replicant "retirement" hunt
-            strip.setPixelColor(i, strip.Color(r, g, b));
-        }
-        // Sweeping "blade runner" effect
-        blades[bladePos] = 255;
-        bladePos = (bladePos + 2) % NUM_LEDS;
-        if (random(100) < 5) {
-            int spark = random(NUM_LEDS);
-            blades[spark] = 150; // Random replicant sparks
-        }
-        lastHunt = millis();
-    }
-}
-
-void waterBrotherBond() {
-    static uint8_t bonds[NUM_LEDS] = {0};
-    static int bondPos = 0;
-    static unsigned long lastBond = 0;
-
-    if (millis() - lastBond >= 40) {
-        for (int i = 0; i < NUM_LEDS; i++) {
-            bonds[i] = max(0, bonds[i] - 10);
-            uint8_t r = bonds[i] / 2;
-            uint8_t g = bonds[i];
-            uint8_t b = bonds[i]; // Blue-green for SIASL water brother bond
-            strip.setPixelColor(i, strip.Color(r, g, b));
-        }
-        // Spreading bond waves
-        bonds[bondPos] = 255;
-        for (int spread = 1; spread < 8; spread++) {
-            int left = (bondPos - spread + NUM_LEDS) % NUM_LEDS;
-            int right = (bondPos + spread) % NUM_LEDS;
-            bonds[left] = max(bonds[left], 200 - spread * 25);
-            bonds[right] = max(bonds[right], 200 - spread * 25);
-        }
-        bondPos = (bondPos + 1) % NUM_LEDS;
-        lastBond = millis();
-    }
-}
-
-void hypnopaediaHum() {
-    static uint16_t humOffset = 0;
-    for (int i = 0; i < NUM_LEDS; i++) {
-        float hum = (sin((float)(i + humOffset) * 0.03f) + 1.0f) / 2.0f; // Gentle hum for BNW hypnopaedia, repetitive
-        uint8_t r = 100 * hum;
-        uint8_t g = 150 * hum;
-        uint8_t b = 200 * hum;
-        strip.setPixelColor(i, strip.Color(r, g, b));
-    }
-    humOffset += 1;
-}
-
-void vogonPoetryPulse() { // Fixed typo in name if needed, but it's vogonPoetryPulse
-    static uint8_t pulse[NUM_LEDS] = {0};
+    static int pulseCenters[5] = {0, 60, 120, 180, 240};
+    static uint8_t pulseRadii[5] = {0};
     static unsigned long lastPulse = 0;
 
-    if (millis() - lastPulse >= 60) {
+    if (millis() - lastPulse >= 25) {
         for (int i = 0; i < NUM_LEDS; i++) {
-            pulse[i] = max(0, pulse[i] - 5);
-            uint8_t r = pulse[i];
-            uint8_t g = pulse[i] * 3 / 4; // Dull, depressing pulses for Vogon poetry, HHGTTG
-            uint8_t b = pulse[i] / 2;
+            uint8_t intensity = 0;
+            for (int p = 0; p < 5; p++) {
+                int dist = abs(i - pulseCenters[p]);
+                if (dist <= pulseRadii[p]) {
+                    intensity = max(intensity, (uint8_t)(255 - dist * 8));
+                }
+            }
+            uint8_t r = intensity / 2;
+            uint8_t g = intensity / 2;
+            uint8_t b = intensity;
             strip.setPixelColor(i, strip.Color(r, g, b));
         }
-        // Slow, uniform pulse for "poetry" torture
-        for (int p = 0; p < 10; p++) {
-            int pos = random(NUM_LEDS);
-            pulse[pos] = random(100, 150);
+        for (int p = 0; p < 5; p++) {
+            pulseRadii[p] += 2;
+            if (pulseRadii[p] >= 40 || random(100) < 10) {
+                pulseCenters[p] = random(NUM_LEDS);
+                pulseRadii[p] = 0;
+            }
         }
         lastPulse = millis();
     }
 }
 
+void waterBrotherBond() {
+    static int balls[10] = {0};
+    static int dirs[10] = {0};
+    static unsigned long lastBounce = 0;
+
+    if (millis() - lastBounce >= 20) {
+        for (int i = 0; i < NUM_LEDS; i++) {
+            strip.setPixelColor(i, strip.Color(0, 50, 100)); // Bond base
+        }
+        for (int b = 0; b < 10; b++) {
+            if (dirs[b] == 0) {
+                balls[b] = random(NUM_LEDS);
+                dirs[b] = random(2) ? 3 : -3;
+            }
+            int pos = balls[b];
+            strip.setPixelColor(pos, strip.Color(0, 255, 255));
+            for (int t = 1; t < 8; t++) {
+                int trail = pos - t * dirs[b] / 3;
+                if (trail >= 0 && trail < NUM_LEDS) {
+                    uint8_t intensity = 200 - t * 25;
+                    strip.setPixelColor(trail, strip.Color(0, intensity, intensity));
+                }
+            }
+            balls[b] += dirs[b];
+            if (balls[b] <= 0 || balls[b] >= NUM_LEDS - 1) {
+                dirs[b] = -dirs[b];
+                int ripple = balls[b];
+                for (int r = -20; r <= 20; r++) {
+                    int rp = ripple + r;
+                    if (rp >= 0 && rp < NUM_LEDS) {
+                        strip.setPixelColor(rp, strip.Color(100, 255, 255));
+                    }
+                }
+            }
+        }
+        lastBounce = millis();
+    }
+}
+
+void hypnopaediaHum() {
+    static uint16_t marqueePos = 0;
+    static unsigned long lastHum = 0;
+
+    if (millis() - lastHum >= 40) {
+        for (int i = 0; i < NUM_LEDS; i++) {
+            float hum = (sin((float)(i + marqueePos) * 0.05f) + 1.0f) / 2.0f;
+            uint8_t r = (uint8_t)(100 * hum);
+            uint8_t g = (uint8_t)(150 * hum);
+            uint8_t b = (uint8_t)(200 * hum);
+            strip.setPixelColor(i, strip.Color(r, g, b));
+        }
+        marqueePos += 2;
+        if (random(100) < 10) {
+            int slingStart = random(NUM_LEDS);
+            for (int s = 0; s < 40; s++) {
+                int pos = (slingStart + s * 4) % NUM_LEDS;
+                strip.setPixelColor(pos, strip.Color(255, 255, 255));
+            }
+        }
+        lastHum = millis();
+    }
+}
+
+void vogonPoetryPulse() {
+    static uint8_t ripples[NUM_LEDS] = {0};
+    static int rippleCenters[4] = {0};
+    static unsigned long lastRipple = 0;
+
+    if (millis() - lastRipple >= 60) {
+        for (int i = 0; i < NUM_LEDS; i++) {
+            ripples[i] = max(0, ripples[i] - 8);
+            uint8_t r = ripples[i] / 2;
+            uint8_t g = ripples[i] * 3 / 4;
+            uint8_t b = ripples[i] / 3;
+            strip.setPixelColor(i, strip.Color(r, g, b));
+        }
+        for (int rc = 0; rc < 4; rc++) {
+            if (random(100) < 25) {
+                rippleCenters[rc] = random(NUM_LEDS);
+            }
+            for (int d = 0; d < 20; d++) {
+                int left = rippleCenters[rc] - d;
+                int right = rippleCenters[rc] + d;
+                uint8_t intensity = 150 - d * 7;
+                if (left >= 0) ripples[left] = max(ripples[left], intensity);
+                if (right < NUM_LEDS) ripples[right] = max(ripples[right], intensity);
+            }
+        }
+        lastRipple = millis();
+    }
+}
+
 void thoughtPoliceFlash() {
     static uint8_t flashes[NUM_LEDS] = {0};
+    static uint8_t flameIntensities[20] = {0};
     static unsigned long lastFlash = 0;
 
     if (millis() - lastFlash >= 25) {
         for (int i = 0; i < NUM_LEDS; i++) {
             flashes[i] = max(0, flashes[i] - 20);
-            uint8_t r = flashes[i];
+            uint8_t r = 0;
             uint8_t g = 0;
-            uint8_t b = 0; // Sudden red flashes for thought police in 1984
+            uint8_t b = flashes[i]; // Blue flashes
             strip.setPixelColor(i, strip.Color(r, g, b));
         }
         if (random(100) < 20) {
@@ -576,33 +714,48 @@ void thoughtPoliceFlash() {
             // Flash cluster for police "raid"
             for (int c = -3; c <= 3; c++) {
                 int idx = (flashPos + c + NUM_LEDS) % NUM_LEDS;
-                flashes[idx] = max(flashes[idx], 200 - abs(c) * 30);
+                flashes[idx] = max(flashes[idx], (uint8_t)(200 - abs(c) * 30));
             }
+        }
+        // Enhanced flame effects at ends with pulsing
+        for (int f = 0; f < 20; f++) {
+            flameIntensities[f] = random(150, 255) * (sin((float)millis() / 200.0f + f * 0.5f) + 1.0f) / 2.0f;
+            uint8_t fr = flameIntensities[f];
+            uint8_t fg = flameIntensities[f] / 2 + random(0, 50);
+            uint8_t fb = random(0, 20);
+            strip.setPixelColor(f, strip.Color(fr, fg, fb));
+            strip.setPixelColor(NUM_LEDS - 1 - f, strip.Color(fr, fg, fb));
         }
         lastFlash = millis();
     }
 }
 
-void electricSheepDream() { // Fixed name if needed
-    static uint8_t dreams[NUM_LEDS] = {0};
-    static int dreamPos = 0;
-    static unsigned long lastDream = 0;
+void electricSheepDream() {
+    static uint8_t rippleCenters[5] = {0};
+    static uint8_t rippleRadii[5] = {0};
+    static unsigned long lastRipple = 0;
 
-    if (millis() - lastDream >= 45) {
+    if (millis() - lastRipple >= 50) {
         for (int i = 0; i < NUM_LEDS; i++) {
-            dreams[i] = max(0, dreams[i] - 10);
-            uint8_t r = dreams[i] / 2;
-            uint8_t g = dreams[i];
-            uint8_t b = dreams[i] / 2; // Greenish for DADES electric sheep dreams
+            uint8_t intensity = 0;
+            for (int r = 0; r < 5; r++) {
+                int dist = abs(i - rippleCenters[r]);
+                if (dist <= rippleRadii[r]) {
+                    intensity = max(intensity, (uint8_t)(255 - dist * 10));
+                }
+            }
+            uint8_t r = 0;
+            uint8_t g = min(255, intensity * 3 / 2);
+            uint8_t b = intensity / 4;
             strip.setPixelColor(i, strip.Color(r, g, b));
         }
-        // Dream-like waves
-        dreams[dreamPos] = 200;
-        dreamPos = (dreamPos + random(1, 3)) % NUM_LEDS;
-        if (random(100) < 8) {
-            int sheep = random(NUM_LEDS);
-            dreams[sheep] = 255; // Random "sheep" bursts
+        for (int r = 0; r < 5; r++) {
+            rippleRadii[r] = min(30, rippleRadii[r] + 1);
+            if (rippleRadii[r] >= 30 || random(100) < 5) {
+                rippleCenters[r] = random(NUM_LEDS);
+                rippleRadii[r] = 0;
+            }
         }
-        lastDream = millis();
+        lastRipple = millis();
     }
 }
