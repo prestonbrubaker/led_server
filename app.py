@@ -29,7 +29,8 @@ VALID_MODES = [
     'hypnopaedia-hum',
     'vogon-poetry-pulse',
     'thought-police-flash',
-    'electric-sheep-dream'
+    'electric-sheep-dream',
+    'QRNG'
 ]
 
 # Function to read the mode from the JSON file
