@@ -10,34 +10,36 @@
 const char *ssid = "BrubakerWifi";
 const char *password = "Pre$ton01";
 
-// Flask server URL
+// Flask server URL for mode
 const char *serverUrl = "http://192.168.1.126:5000/mode";
 
 // Quantum server details for QRNG mode
-IPAddress quantumServerIP(192, 168, 1, 180);
-const int quantumServerPort = 6011;
+IPAddress quantumServerIP(192, 168, 1, 238);
+const int quantumServerPort = 8003;
 
 // LED strip configuration
 #define NUM_LEDS 300
 #define DATA_PIN 2    // GPIO2
 #define BRIGHTNESS 50 // 0-255
+#define QUANTUM_BATCH_SIZE 2400
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUM_LEDS, DATA_PIN, NEO_GRB + NEO_KHZ800);
 
 // Current mode and timing
 String currentMode = "off";
 unsigned long lastPoll = 0;
-const unsigned long pollInterval = 2000; // Poll every 2 seconds
+const unsigned long pollInterval = 2000; // Poll every 2 seconds for mode
 unsigned long lastUpdate = 0;
-const unsigned long updateInterval = 30; // ~33 FPS
+unsigned long updateInterval = 30; // Default ~33 FPS, adjustable per mode
 
 // QRNG mode variables
 int quantumCursor = 0;
 unsigned long quantumLastPoll = 0;
-const unsigned long quantumPollInterval = 1000; // Poll every 1s for batch
-const int quantumBatchSize = 10;                // Fetch 10 states at a time
-int quantumStates[quantumBatchSize] = {0};      // Buffer for batched states
-int quantumStateIndex = 0;                      // Current index in buffer
-int quantumStatesAvailable = 0;                 // Number of states in buffer
+const unsigned long quantumPollInterval = 1000;
+int quantumStates[QUANTUM_BATCH_SIZE] = {0};
+int quantumStateIndex = 0;
+int quantumStatesAvailable = 0;
+unsigned long quantumLastLedUpdate = 0;
+const unsigned long quantumLedInterval = 100;
 
 void setup()
 {
@@ -65,13 +67,23 @@ void setup()
 
 void loop()
 {
-    // Check Wi-Fi connection
     if (WiFi.status() != WL_CONNECTED)
     {
         Serial.println("WiFi disconnected, reconnecting...");
-        WiFi.reconnect();
-        delay(2000);
-        return;
+        WiFi.begin(ssid, password);
+        int retries = 10;
+        while (WiFi.status() != WL_CONNECTED && retries > 0)
+        {
+            delay(1000);
+            Serial.println("Reconnecting...");
+            retries--;
+        }
+        if (WiFi.status() != WL_CONNECTED)
+        {
+            Serial.println("Reconnection failed");
+            return;
+        }
+        Serial.println("Reconnected to WiFi");
     }
 
     // Poll server for mode updates
@@ -84,6 +96,18 @@ void loop()
             Serial.println("New mode: " + currentMode);
             setLedsOff();
             resetModeState(); // Reset mode-specific state
+            if (currentMode == "QRNG")
+            {
+                updateInterval = quantumLedInterval;
+                quantumCursor = 0;
+                quantumStateIndex = 0;
+                quantumStatesAvailable = 0;
+                quantumLastLedUpdate = 0;
+            }
+            else
+            {
+                updateInterval = 30; // Default for other modes
+            }
         }
         lastPoll = millis();
     }
@@ -91,70 +115,92 @@ void loop()
     // Update LED pattern based on mode
     if (millis() - lastUpdate >= updateInterval)
     {
-        if (currentMode == "rainbow-flow") {
+        if (currentMode == "rainbow-flow")
+        {
             rainbowFlow();
         }
-else if (currentMode == "constant-red") {
+        else if (currentMode == "constant-red")
+        {
             setLedsRed();
         }
-        else if (currentMode == "off") {
+        else if (currentMode == "off")
+        {
             setLedsOff();
         }
-        else if (currentMode == "proletariat-crackle") {
+        else if (currentMode == "proletariat-crackle")
+        {
             proletariatCrackle();
         }
-        else if (currentMode == "soma-haze") {
+        else if (currentMode == "soma-haze")
+        {
             somaHaze();
         }
-        else if (currentMode == "loonie-freefall") {
+        else if (currentMode == "loonie-freefall")
+        {
             loonieFreefall();
         }
-        else if (currentMode == "bokanovsky-burst") {
+        else if (currentMode == "bokanovsky-burst")
+        {
             bokanovskyBurst();
         }
-        else if (currentMode == "total-perspective-vortex") {
+        else if (currentMode == "total-perspective-vortex")
+        {
             totalPerspectiveVortex();
         }
-        else if (currentMode == "golgafrincham-drift") {
+        else if (currentMode == "golgafrincham-drift")
+        {
             golgafrinchamDrift();
         }
-        else if (currentMode == "bistromathics-surge") {
+        else if (currentMode == "bistromathics-surge")
+        {
             bistromathicsSurge();
         }
-        else if (currentMode == "groks-dissolution") {
+        else if (currentMode == "groks-dissolution")
+        {
             groksDissolution();
         }
-        else if (currentMode == "newspeak-shrink") {
+        else if (currentMode == "newspeak-shrink")
+        {
             newspeakShrink();
         }
-        else if (currentMode == "nolite-te-bastardes") {
+        else if (currentMode == "nolite-te-bastardes")
+        {
             noliteTeBastardes();
         }
-        else if (currentMode == "infinite-improbability-drive") {
+        else if (currentMode == "infinite-improbability-drive")
+        {
             infiniteImprobabilityDrive();
         }
-        else if (currentMode == "big-brother-glare") {
+        else if (currentMode == "big-brother-glare")
+        {
             bigBrotherGlare();
         }
-        else if (currentMode == "replicant-retirement") {
+        else if (currentMode == "replicant-retirement")
+        {
             replicantRetirement();
         }
-        else if (currentMode == "water-brother-bond") {
+        else if (currentMode == "water-brother-bond")
+        {
             waterBrotherBond();
         }
-        else if (currentMode == "hypnopaedia-hum") {
+        else if (currentMode == "hypnopaedia-hum")
+        {
             hypnopaediaHum();
         }
-        else if (currentMode == "vogon-poetry-pulse") {
+        else if (currentMode == "vogon-poetry-pulse")
+        {
             vogonPoetryPulse();
         }
-        else if (currentMode == "thought-police-flash") {
+        else if (currentMode == "thought-police-flash")
+        {
             thoughtPoliceFlash();
         }
-        else if (currentMode == "electric-sheep-dream") {
+        else if (currentMode == "electric-sheep-dream")
+        {
             electricSheepDream();
         }
-        else if (currentMode == "QRNG") {
+        else if (currentMode == "QRNG")
+        {
             quantumRandom();
         }
         strip.show();
@@ -202,14 +248,13 @@ String getModeFromServer()
     return mode;
 }
 
-void resetModeState()
-{
-    // Reset mode-specific static variables to avoid glitches
+void resetModeState() {
     static uint8_t dummyBuffer[NUM_LEDS] = {0};
-    memcpy(dummyBuffer, dummyBuffer, NUM_LEDS); // Clear buffer
+    memcpy(dummyBuffer, dummyBuffer, NUM_LEDS);
     quantumCursor = 0;
     quantumStateIndex = 0;
     quantumStatesAvailable = 0;
+    quantumLastLedUpdate = 0;
 }
 
 void setPixel(int pixel, byte red, byte green, byte blue)
@@ -225,56 +270,142 @@ void setAll(byte red, byte green, byte blue)
     }
 }
 
-void quantumRandom()
+void hslToRgb(float h, float s, float l, uint8_t &r, uint8_t &g, uint8_t &b)
 {
-    // If buffer is empty, try to fetch new states
-    if (quantumStatesAvailable == 0 && millis() - quantumLastPoll >= quantumPollInterval)
+    // h: 0-360, s: 0-1, l: 0-1
+    float c = (1.0f - fabs(2.0f * l - 1.0f)) * s; // Chroma
+    float x = c * (1.0f - fabs(fmod(h / 60.0f, 2.0f) - 1.0f));
+    float m = l - c / 2.0f;
+    float r1, g1, b1;
+
+    if (h >= 0 && h < 60)
     {
-        quantumStatesAvailable = getQuantumStatesFromServer();
-        quantumStateIndex = 0;
-        quantumLastPoll = millis();
+        r1 = c;
+        g1 = x;
+        b1 = 0;
+    }
+    else if (h >= 60 && h < 120)
+    {
+        r1 = x;
+        g1 = c;
+        b1 = 0;
+    }
+    else if (h >= 120 && h < 180)
+    {
+        r1 = 0;
+        g1 = c;
+        b1 = x;
+    }
+    else if (h >= 180 && h < 240)
+    {
+        r1 = 0;
+        g1 = x;
+        b1 = c;
+    }
+    else if (h >= 240 && h < 300)
+    {
+        r1 = x;
+        g1 = 0;
+        b1 = c;
+    }
+    else
+    {
+        r1 = c;
+        g1 = 0;
+        b1 = x;
     }
 
-    // Apply next state if available
-    if (quantumStatesAvailable > 0)
+    r = (uint8_t)((r1 + m) * 255);
+    g = (uint8_t)((g1 + m) * 255);
+    b = (uint8_t)((b1 + m) * 255);
+}
+
+void quantumRandom()
+{
+    // Update LEDs only if enough time has passed
+    if (millis() - quantumLastLedUpdate >= quantumLedInterval)
     {
-        int state = quantumStates[quantumStateIndex];
-        uint32_t color = (state == 1) ? strip.Color(200, 0, 0) : strip.Color(0, 0, 0); 
-        strip.setPixelColor(quantumCursor, color);
-        quantumCursor = (quantumCursor + 1) % NUM_LEDS;
-        quantumStateIndex++;
-        quantumStatesAvailable--;
+        // Need 8 bits per LED for hue (300 LEDs * 8 = 2400 bits per full update)
+        int bitsNeeded = NUM_LEDS * 8;
+        if (quantumStatesAvailable < bitsNeeded && millis() - quantumLastPoll >= quantumPollInterval)
+        {
+            quantumStatesAvailable = getQuantumStatesFromServer();
+            quantumStateIndex = 0;
+            quantumLastPoll = millis();
+            if (quantumStatesAvailable < bitsNeeded)
+            {
+                // Fallback: Set all LEDs to black
+                setLedsOff();
+                Serial.println("Insufficient quantum bits, setting LEDs to black");
+                quantumStatesAvailable = 0;
+            }
+        }
+
+        // If enough bits are available, update all LEDs
+        if (quantumStatesAvailable >= bitsNeeded)
+        {
+            // Set three LEDs ahead of cursor to black for trailing effect
+            for (int i = 1; i <= 3; i++)
+            {
+                int blackLed = (quantumCursor + i) % NUM_LEDS;
+                strip.setPixelColor(blackLed, strip.Color(0, 0, 0));
+            }
+
+            // Update all LEDs using quantum bits
+            for (int i = 0; i < NUM_LEDS; i++)
+            {
+                int offset = quantumStateIndex + i * 8;
+                int hueValue = 0;
+                for (int j = 0; j < 8; j++)
+                {
+                    if (offset + j < quantumStatesAvailable)
+                    {
+                        hueValue += quantumStates[offset + j] * (1 << j);
+                    }
+                }
+                // Map 8-bit value (0-255) to hue (0-360°)
+                float hue = (float)hueValue * 360.0f / 255.0f;
+                float saturation = 0.9f; // High saturation for vibrant colors
+                float lightness = 0.5f;  // Balanced lightness
+                uint8_t r, g, b;
+                hslToRgb(hue, saturation, lightness, r, g, b);
+                strip.setPixelColor(i, strip.Color(r, g, b));
+            }
+            quantumCursor = (quantumCursor + 1) % NUM_LEDS; // Maintain cursor for trailing effect
+            quantumStateIndex += bitsNeeded;
+            quantumStatesAvailable -= bitsNeeded;
+            quantumLastLedUpdate = millis();
+            Serial.printf("Updated %d LEDs with quantum bits, remaining: %d\n", NUM_LEDS, quantumStatesAvailable);
+        }
     }
 }
 
 int getQuantumStatesFromServer()
 {
     WiFiClient client;
-    if (!client.connect(quantumServerIP, quantumServerPort))
+    HTTPClient http;
+    String url = "http://" + quantumServerIP.toString() + ":" + String(quantumServerPort) + "/bits?count=" + String(QUANTUM_BATCH_SIZE);
+
+    http.setTimeout(5000); // 5s timeout
+    Serial.print("Attempting HTTP GET to: ");
+    Serial.println(url);
+
+    if (!http.begin(client, url))
     {
         Serial.println("Unable to connect to quantum server");
         return 0;
     }
 
-    // Send request (assuming server expects a simple GET; modify if needed)
-    client.print("GET /states HTTP/1.1\r\nHost: ");
-    client.print(quantumServerIP.toString());
-    client.print(":");
-    client.print(quantumServerPort);
-    client.print("\r\nConnection: close\r\n\r\n");
-
-    // Read response
-    String json = "";
-    unsigned long timeout = millis() + 5000; // 5s timeout
-    while (client.connected() && millis() < timeout)
+    int httpCode = http.GET();
+    if (httpCode != HTTP_CODE_OK)
     {
-        if (client.available())
-        {
-            char c = client.read();
-            json += c;
-        }
+        Serial.printf("HTTP GET failed, error: %s\n", http.errorToString(httpCode).c_str());
+        http.end();
+        return 0;
     }
-    client.stop();
+
+    String json = http.getString();
+    http.end();
 
     if (json.length() == 0)
     {
@@ -283,7 +414,7 @@ int getQuantumStatesFromServer()
     }
 
     // Parse JSON
-    DynamicJsonDocument doc(1024);
+    DynamicJsonDocument doc(2048);
     DeserializationError error = deserializeJson(doc, json);
     if (error)
     {
@@ -291,22 +422,21 @@ int getQuantumStatesFromServer()
         return 0;
     }
 
-    JsonArray states = doc["states"].as<JsonArray>();
+    JsonArray bits = doc["bits"].as<JsonArray>();
     int count = 0;
-    for (JsonVariant v : states)
+    for (JsonVariant v : bits)
     {
-        if (count < quantumBatchSize)
+        if (count < QUANTUM_BATCH_SIZE)
         {
             quantumStates[count] = v.as<int>();
             count++;
         }
     }
-    Serial.printf("Received %d quantum states\n", count);
+    Serial.printf("Received %d quantum bits\n", count);
     return count;
 }
 
-void rainbowFlow()
-{
+void rainbowFlow() {
     static uint16_t hue = 0;
     static uint8_t sparkles[NUM_LEDS] = {0};
     static uint8_t sparkleColors[NUM_LEDS][3] = {{0}};
@@ -319,17 +449,15 @@ void rainbowFlow()
         {
             sparkles[i] = max(0, sparkles[i] - 20);
             uint8_t r, g, b;
-            if (sparkles[i] > 0)
-            {
+            if (sparkles[i] > 0) {
                 r = sparkleColors[i][0];
                 g = sparkleColors[i][1];
                 b = sparkleColors[i][2];
             }
-            else
-            {
-                uint16_t h = hue + (i * 65536L / NUM_LEDS);               // Full rainbow cycle
-                uint8_t s = 255;                                          // Maximum saturation for deep colors
-                uint8_t v = 100 + (sin((hue + i * 100) * 0.01) + 1) * 50; // Brightness 100-200
+            else {
+                uint16_t h = hue + (i * 65536L / NUM_LEDS);
+                uint8_t s = 255;
+                uint8_t v = (h < 21845) ? 150 + (sin((hue + i * 100) * 0.01) + 1) * 25 : 100 + (sin((hue + i * 100) * 0.01) + 1) * 50;
                 uint32_t c = strip.ColorHSV(h, s, v);
                 r = (c >> 16) & 0xFF;
                 g = (c >> 8) & 0xFF;
@@ -337,16 +465,14 @@ void rainbowFlow()
             }
             strip.setPixelColor(i, strip.Color(r, g, b));
         }
-        if (random(100) < 5)
-        {
-            for (int j = 0; j < random(1, 4); j++)
-            {
+        if (random(100) < 10) {
+            for (int j = 0; j < random(1, 4); j++) {
                 int spark = random(NUM_LEDS);
                 sparkles[spark] = random(180, 255);
                 uint8_t sparkType = random(3);
                 if (sparkType == 0)
                 {
-                    sparkleColors[spark][0] = sparkles[spark]; // White
+                    sparkleColors[spark][0] = sparkles[spark];
                     sparkleColors[spark][1] = sparkles[spark];
                     sparkleColors[spark][2] = sparkles[spark];
                 }
@@ -395,8 +521,8 @@ void proletariatCrackle()
     {
         for (int i = 0; i < NUM_LEDS; i++)
         {
-            intensities[i] = std::max((uint8_t)0, (uint8_t)(intensities[i] - random(5, 15)));
-            uint8_t r = std::min((uint8_t)255, (uint8_t)(255 * intensities[i] / 255));
+            intensities[i] = max((uint8_t)0, (uint8_t)(intensities[i] - random(5, 15)));
+            uint8_t r = min(255, 255 * intensities[i] / 255);
             uint8_t g = intensities[i] / 10;
             strip.setPixelColor(i, strip.Color(r, g, 0));
         }
@@ -411,46 +537,27 @@ void proletariatCrackle()
 
 void somaHaze()
 {
-    float time = millis() / 60000.0f; // Time in minutes for 60-second cycle
-    float phase = time * 2 * M_PI;    // Full cycle every minute, continuous
+    static uint16_t pinkOffset = 0;
+    static uint16_t blueOffset = 0;
+    static unsigned long lastMorph = 0;
 
-    // Define super pink (hot pink)
-    uint8_t pinkR = 255;
-    uint8_t pinkG = 105;
-    uint8_t pinkB = 180;
-
-    // Define soft blue/purple (medium orchid)
-    uint8_t blueR = 186;
-    uint8_t blueG = 85;
-    uint8_t blueB = 211;
-
-    // Temporal blend oscillates smoothly between 0 (pink) and 1 (blue/purple)
-    float baseBlend = (sin(phase) + 1.0f) / 2.0f; // 0 to 1, seamless cycle
-
-    for (int i = 0; i < NUM_LEDS; i++)
+    if (millis() - lastMorph >= 20)
     {
-        // Normalized position along strip (0 to 1)
-        float pos = (float)i / (NUM_LEDS - 1);
-
-        // Sine-based spatial gradient, synchronized with temporal phase
-        float spatialPhase = pos * M_PI + phase;                // Spatial wave moves with time
-        float spatialBlend = (sin(spatialPhase) + 1.0f) / 2.0f; // Smooth wave across strip
-
-        // Combine temporal and spatial blends for fluid gradient
-        float blend = (1.0f - baseBlend) * (1.0f - spatialBlend) + baseBlend * spatialBlend;
-
-        // Interpolate between pink and blue/purple
-        uint8_t r = (uint8_t)(pinkR * (1.0f - blend) + blueR * blend);
-        uint8_t g = (uint8_t)(pinkG * (1.0f - blend) + blueG * blend);
-        uint8_t b = (uint8_t)(pinkB * (1.0f - blend) + blueB * blend);
-
-        // Subtle ethereal pulsation for a dreamy effect
-        float glow = (sin(phase * 0.3f + pos * M_PI * 0.8f) + 1.0f) / 2.0f * 0.15f + 0.85f; // Varies 0.85 to 1.0
-        r = (uint8_t)(r * glow);
-        g = (uint8_t)(g * glow);
-        b = (uint8_t)(b * glow);
-
-        strip.setPixelColor(i, strip.Color(r, g, b));
+        for (int i = 0; i < NUM_LEDS; i++)
+        {
+            float pinkBlend = (sin((float)(i + pinkOffset) * 0.08f) + 1.0f) / 2.0f;
+            float blueBlend = (cos((float)(i + blueOffset) * 0.06f) + 1.0f) / 2.0f;
+            uint8_t r = (uint8_t)(255 * pinkBlend + 173 * blueBlend);
+            uint8_t g = (uint8_t)(192 * pinkBlend + 216 * blueBlend);
+            uint8_t b = (uint8_t)(203 * pinkBlend + 230 * blueBlend);
+            float morphFactor = (sin((float)i * 0.1f + (float)pinkOffset * 0.05f) + 1.0f) / 2.0f;
+            r = (uint8_t)(r * morphFactor + (255 - r) * (1 - morphFactor) / 2);
+            b = (uint8_t)(b * (1 - morphFactor) + (255 - b) * morphFactor / 2);
+            strip.setPixelColor(i, strip.Color(r, g, b));
+        }
+        pinkOffset += 2;
+        blueOffset -= 3;
+        lastMorph = millis();
     }
 }
 
