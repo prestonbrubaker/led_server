@@ -13,6 +13,11 @@ const char *password = "Pre$ton01";
 // Flask server URL for mode
 const char *serverUrl = "http://192.168.1.126:5000/mode";
 
+// SD card server details
+IPAddress sdServerIP(192, 168, 1, 250);
+const int sdServerPort = 8023;
+const long long sdStartAddr = 2048;
+
 // Quantum server details for QRNG mode
 IPAddress quantumServerIP(192, 168, 1, 238);
 const int quantumServerPort = 8003;
@@ -203,6 +208,10 @@ void loop()
         {
             quantumRandom();
         }
+        else if (currentMode == "sd-client")
+        {
+            sdClient();
+        }
         strip.show();
         lastUpdate = millis();
     }
@@ -318,6 +327,109 @@ void hslToRgb(float h, float s, float l, uint8_t &r, uint8_t &g, uint8_t &b)
     r = (uint8_t)((r1 + m) * 255);
     g = (uint8_t)((g1 + m) * 255);
     b = (uint8_t)((b1 + m) * 255);
+}
+
+// Function to read a single byte from the SD server
+int readByteFromSD(long long addr) {
+    WiFiClient client;
+    client.setTimeout(5000); // Socket-level timeout in ms
+    String host = sdServerIP.toString();
+    int port = sdServerPort;
+
+    // Attempt connection with timeout
+    unsigned long connectStart = millis();
+    if (!client.connect(host.c_str(), port)) {
+        return -1;
+    }
+    if (millis() - connectStart > 5000) {
+        client.stop();
+        return -1;
+    }
+
+    // Send GET request
+    String url = "/read?addr=" + String(addr);
+    client.print(String("GET ") + url + " HTTP/1.1\r\n" +
+                 "Host: " + host + "\r\n" +
+                 "Connection: close\r\n\r\n");
+
+    // Read response with overall timeout
+    unsigned long start = millis();
+    String response = "";
+    bool headersDone = false;
+    while (client.connected() || client.available()) {
+        if (millis() - start > 5000) {
+            client.stop();
+            return -1; // Timed out
+        }
+
+        if (client.available()) {
+            char c = client.read();
+            response += c;
+            if (response.endsWith("\r\n\r\n")) {
+                headersDone = true;
+            }
+            if (headersDone) {
+                // Continue collecting body (assuming small response)
+                while (client.available()) {
+                    response += (char)client.read();
+                }
+                break;
+            }
+        } else {
+            delay(10); // Yield to avoid tight loop
+        }
+    }
+
+    client.stop();
+
+    // Extract body (skip headers)
+    int bodyStart = response.indexOf("\r\n\r\n") + 4;
+    if (bodyStart > 3) {
+        String body = response.substring(bodyStart);
+        body.trim();
+        return body.toInt();
+    }
+    return -1; // No valid body
+}
+
+void sdClient() {
+    static uint8_t sdData[900] = {0}; // Buffer for 300 LEDs * 3 bytes (RGB)
+
+    Serial.println("Fetching 900 bytes from SD server...");
+    int bytesFetched = 0;
+    for (int i = 0; i < 900; i++) {
+        long long addr = sdStartAddr + i;
+
+        int tries = 0;
+        int value = -1;
+        while (tries < 10 && value == -1) {
+            value = readByteFromSD(addr);
+
+            printf("Byte: %d Read Value: %d\n", i, value);
+            if (value != -1) {
+                sdData[i] = (uint8_t)value;
+                bytesFetched++;
+            } else {
+                sdData[i] = 0; // Fallback to black on error
+                Serial.printf("Error reading addr %lld on attempt %d\n", addr, tries);
+                delay(500);
+            }
+            tries++;
+        }
+        // Optional: Add small delay to avoid overwhelming the server/network
+        delay(1);
+    }
+    Serial.printf("Fetched %d bytes from SD server\n", bytesFetched);
+    
+
+    // Set LEDs from buffered data
+    for (int led = 0; led < NUM_LEDS; led++) {
+        int idx = led * 3;
+        uint8_t r = sdData[idx];
+        uint8_t g = sdData[idx + 1];
+        uint8_t b = sdData[idx + 2];
+        strip.setPixelColor(led, strip.Color(r, g, b));
+    }
 }
 
 void quantumRandom()

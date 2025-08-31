@@ -30,7 +30,8 @@ VALID_MODES = [
     'vogon-poetry-pulse',
     'thought-police-flash',
     'electric-sheep-dream',
-    'QRNG'  # Added QRNG mode
+    'QRNG',
+    'sd-client'
 ]
 
 # Function to read the mode from the JSON file
