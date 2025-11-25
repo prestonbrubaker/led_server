@@ -11,7 +11,7 @@ const char *ssid = "BrubakerWifi";
 const char *password = "Pre$ton01";
 
 // Flask server URL for mode
-const char *serverUrl = "http://192.168.1.126:5000/mode";
+const char *serverUrl = "http://192.168.1.198:5000/mode";
 
 // SD card server details
 IPAddress sdServerIP(192, 168, 1, 250);
