@@ -12,11 +12,11 @@ const char *password = "Pre$ton01";
 
 // Holdings
 #define BTC_HOLDINGS 0.00003484
-#define RVN_HOLDINGS 22.182229
+#define RVN_HOLDINGS 0.000
 #define ZEC_HOLDINGS 0.00061431
 #define ETH_HOLDINGS 0.00109387
 #define DOGE_HOLDINGS 20.20737449
-#define TSLAx_HOLDINGS 0.0031461
+#define PEPE_HOLDINGS 204335.86337954
 
 // Matrix — YOUR ORIGINAL WORKING CONFIG (keep this!)
 #define PIN 2
@@ -40,6 +40,7 @@ uint16_t RED = matrix.Color(255, 0, 0);
 void setup()
 {
     matrix.begin();
+    matrix.setRotation(4);
     matrix.setTextWrap(false);
     matrix.setBrightness(25); // As tweaked
     matrix.setFont();         // default 8px font
@@ -118,7 +119,7 @@ void loop()
     }
 
     matrix.show();
-    delay(25); // As tweaked
+    delay(10); // As tweaked
 }
 
 // -----------------------------------------------------------
@@ -136,7 +137,7 @@ void fetchPrices()
     client.setInsecure();
     HTTPClient http;
 
-    String url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ravencoin,zcash,ethereum,dogecoin,tesla-xstock&vs_currencies=usd&include_24hr_change=true";
+    String url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ravencoin,zcash,ethereum,dogecoin,tesla-xstock,pepe&vs_currencies=usd&include_24hr_change=true";
     http.begin(client, url);
 
     if (http.GET() == HTTP_CODE_OK)
@@ -155,15 +156,15 @@ void fetchPrices()
         float ethChange = doc["ethereum"]["usd_24h_change"];
         float dogePrice = doc["dogecoin"]["usd"];
         float dogeChange = doc["dogecoin"]["usd_24h_change"];
-        float tslaPrice = doc["tesla-xstock"]["usd"];
-        float tslaChange = doc["tesla-xstock"]["usd_24h_change"];
+        float pepePrice = doc["pepe"]["usd"];
+        float pepeChange = doc["pepe"]["usd_24h_change"];
 
         float btcValue = btcPrice * BTC_HOLDINGS;
         float rvnValue = rvnPrice * RVN_HOLDINGS;
         float zecValue = zecPrice * ZEC_HOLDINGS;
         float ethValue = ethPrice * ETH_HOLDINGS;
         float dogeValue = dogePrice * DOGE_HOLDINGS;
-        float tslaValue = tslaPrice * TSLAx_HOLDINGS;
+        float pepeValue = pepePrice * PEPE_HOLDINGS;
 
         scrollText = "BTC $" + String((int)(btcPrice + 0.5)) +
                      " (" + (btcChange > 0 ? "+" : "") + String(btcChange, 1) + "%) " +
@@ -175,14 +176,14 @@ void fetchPrices()
                      " (" + (ethChange > 0 ? "+" : "") + String(ethChange, 1) + "%) " +
                      "DOGE $" + String(dogePrice, 4) +
                      " (" + (dogeChange > 0 ? "+" : "") + String(dogeChange, 1) + "%) " +
-                     "TSLAx $" + String((int)(tslaPrice + 0.5)) +
-                     " (" + (tslaChange > 0 ? "+" : "") + String(tslaChange, 1) + "%) " +
+                     "PEPE $" + String((int)(pepePrice + 0.5)) +
+                     " (" + (pepeChange > 0 ? "+" : "") + String(pepeChange, 1) + "%) " +
                      "Holdings: BTC $" + String(btcValue, 2) +
                      " RVN $" + String(rvnValue, 2) +
                      " ZEC $" + String(zecValue, 2) +
                      " ETH $" + String(ethValue, 2) +
                      " DOGE $" + String(dogeValue, 2) +
-                     " TSLAx $" + String(tslaValue, 2) + "   ";
+                     " PEPE $" + String(pepeValue, 2) + "   ";
     }
     else
     {
