@@ -10,15 +10,7 @@
 const char *ssid = "BrubakerWifi";
 const char *password = "Pre$ton01";
 
-// Holdings
-#define BTC_HOLDINGS 0.00003484
-#define RVN_HOLDINGS 50.2222
-#define ZEC_HOLDINGS 0.00061431
-#define ETH_HOLDINGS 0.00109387
-#define DOGE_HOLDINGS 20.20737449
-#define PEPE_HOLDINGS 204335.86337954
-
-// Matrix — YOUR ORIGINAL WORKING CONFIG (keep this!)
+// Matrix — YOUR ORIGINAL WORKING CONFIG
 #define PIN 2
 Adafruit_NeoMatrix matrix = Adafruit_NeoMatrix(32, 8, PIN,
                                                NEO_MATRIX_BOTTOM + NEO_MATRIX_RIGHT +
@@ -42,8 +34,8 @@ void setup()
     matrix.begin();
     matrix.setRotation(4);
     matrix.setTextWrap(false);
-    matrix.setBrightness(25); // As tweaked
-    matrix.setFont();         // default 8px font
+    matrix.setBrightness(25);
+    matrix.setFont();
     matrix.clear();
     matrix.show();
 
@@ -108,8 +100,7 @@ void loop()
         matrix.setCursor(x, 0);
         matrix.print(c);
 
-        // Simple width advance — default font is ~6px wide on average
-        x += 6 + LETTER_SPACING; // 6px char + 1px space = perfect tight spacing
+        x += 6 + LETTER_SPACING;
     }
 
     textX--;
@@ -119,11 +110,12 @@ void loop()
     }
 
     matrix.show();
-    delay(1); // As tweaked
+    delay(1);
 }
 
 // -----------------------------------------------------------
-// Fetch prices + holdings to nearest cent
+// Fetch prices + 24h % change for TSLAx, SOL, BTC, UBER, SPYx
+// (LYFT removed — no tokenized version exists on CoinGecko)
 // -----------------------------------------------------------
 void fetchPrices()
 {
@@ -137,7 +129,8 @@ void fetchPrices()
     client.setInsecure();
     HTTPClient http;
 
-    String url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ravencoin,zcash,ethereum,dogecoin,tesla-xstock,pepe&vs_currencies=usd&include_24hr_change=true";
+    // Updated IDs — Uber now uses the working Ondo version
+    String url = "https://api.coingecko.com/api/v3/simple/price?ids=tesla-xstock,solana,bitcoin,uber-ondo-tokenized-stock,sp500-xstock&vs_currencies=usd&include_24hr_change=true";
     http.begin(client, url);
 
     if (http.GET() == HTTP_CODE_OK)
@@ -146,44 +139,27 @@ void fetchPrices()
         DynamicJsonDocument doc(1024);
         deserializeJson(doc, payload);
 
+        float tslaPrice = doc["tesla-xstock"]["usd"];
+        float tslaChange = doc["tesla-xstock"]["usd_24h_change"];
+        float solPrice = doc["solana"]["usd"];
+        float solChange = doc["solana"]["usd_24h_change"];
         float btcPrice = doc["bitcoin"]["usd"];
         float btcChange = doc["bitcoin"]["usd_24h_change"];
-        float rvnPrice = doc["ravencoin"]["usd"];
-        float rvnChange = doc["ravencoin"]["usd_24h_change"];
-        float zecPrice = doc["zcash"]["usd"];
-        float zecChange = doc["zcash"]["usd_24h_change"];
-        float ethPrice = doc["ethereum"]["usd"];
-        float ethChange = doc["ethereum"]["usd_24h_change"];
-        float dogePrice = doc["dogecoin"]["usd"];
-        float dogeChange = doc["dogecoin"]["usd_24h_change"];
-        float pepePrice = doc["pepe"]["usd"];
-        float pepeChange = doc["pepe"]["usd_24h_change"];
+        float uberPrice = doc["uber-ondo-tokenized-stock"]["usd"];
+        float uberChange = doc["uber-ondo-tokenized-stock"]["usd_24h_change"];
+        float spyxPrice = doc["sp500-xstock"]["usd"];
+        float spyxChange = doc["sp500-xstock"]["usd_24h_change"];
 
-        float btcValue = btcPrice * BTC_HOLDINGS;
-        float rvnValue = rvnPrice * RVN_HOLDINGS;
-        float zecValue = zecPrice * ZEC_HOLDINGS;
-        float ethValue = ethPrice * ETH_HOLDINGS;
-        float dogeValue = dogePrice * DOGE_HOLDINGS;
-        float pepeValue = pepePrice * PEPE_HOLDINGS;
-
-        scrollText = "BTC $" + String((int)(btcPrice + 0.5)) +
+        scrollText = "TSLAx $" + String((int)(tslaPrice + 0.5)) +
+                     " (" + (tslaChange > 0 ? "+" : "") + String(tslaChange, 1) + "%) " +
+                     "SOL $" + String(solPrice, 2) +
+                     " (" + (solChange > 0 ? "+" : "") + String(solChange, 1) + "%) " +
+                     "BTC $" + String((int)(btcPrice + 0.5)) +
                      " (" + (btcChange > 0 ? "+" : "") + String(btcChange, 1) + "%) " +
-                     "RVN $" + String(rvnPrice, 4) +
-                     " (" + (rvnChange > 0 ? "+" : "") + String(rvnChange, 1) + "%) " +
-                     "ZEC $" + String(zecPrice, 4) +
-                     " (" + (zecChange > 0 ? "+" : "") + String(zecChange, 1) + "%) " +
-                     "ETH $" + String((int)(ethPrice + 0.5)) +
-                     " (" + (ethChange > 0 ? "+" : "") + String(ethChange, 1) + "%) " +
-                     "DOGE $" + String(dogePrice, 4) +
-                     " (" + (dogeChange > 0 ? "+" : "") + String(dogeChange, 1) + "%) " +
-                     "PEPE $" + String((int)(pepePrice + 0.5)) +
-                     " (" + (pepeChange > 0 ? "+" : "") + String(pepeChange, 1) + "%) " +
-                     "Holdings: BTC $" + String(btcValue, 2) +
-                     " RVN $" + String(rvnValue, 2) +
-                     " ZEC $" + String(zecValue, 2) +
-                     " ETH $" + String(ethValue, 2) +
-                     " DOGE $" + String(dogeValue, 2) +
-                     " PEPE $" + String(pepeValue, 2) + "   ";
+                     "UBER $" + String(uberPrice, 2) +
+                     " (" + (uberChange > 0 ? "+" : "") + String(uberChange, 1) + "%) " +
+                     "SPYx $" + String((int)(spyxPrice + 0.5)) +
+                     " (" + (spyxChange > 0 ? "+" : "") + String(spyxChange, 1) + "%)   ";
     }
     else
     {
