@@ -121,12 +121,13 @@
     </div>
 
     <script>
-        // Fetch current mode
+        // Fetch current mode (now uses HTTPS via Cloudflare)
         function fetchCurrentMode() {
-            fetch('http://192.168.1.198:5000/mode')
+            fetch('/mode')
                 .then(response => response.text())
                 .then(mode => {
-                    document.getElementById('current-mode').textContent = mode.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                    document.getElementById('current-mode').textContent = 
+                        mode.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
                     document.getElementById('mode').value = mode;
                 })
                 .catch(error => {
@@ -136,7 +137,7 @@
                 });
         }
 
-        // Update mode
+        // Update mode (now uses HTTPS via Cloudflare)
         function updateMode() {
             const modeSelect = document.getElementById('mode');
             const updateButton = document.querySelector('button');
@@ -146,7 +147,7 @@
             updateButton.disabled = true;
             errorMessage.style.display = 'none';
 
-            fetch('http://192.168.1.198:5000/update', {
+            fetch('/update', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ mode: mode })
@@ -154,7 +155,8 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.message) {
-                        document.getElementById('current-mode').textContent = mode.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                        document.getElementById('current-mode').textContent = 
+                            mode.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
                         alert(`Mode set to ${mode.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}! Don't forget your towel!`);
                     } else {
                         errorMessage.textContent = data.error || 'Something\'s gone terribly wrong!';
@@ -177,7 +179,6 @@
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
             const ctx = canvas.getContext('2d');
-
             for (let i = 0; i < 200; i++) {
                 const x = Math.random() * canvas.width;
                 const y = Math.random() * canvas.height;

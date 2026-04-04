@@ -7,24 +7,24 @@
 #include <ArduinoJson.h>
 
 // Wi-Fi credentials
-const char *ssid = "BrubakerWifi";
+const char *ssid = "BrubakerWifi2";
 const char *password = "Pre$ton01";
 
-// Flask server URL for mode
-const char *serverUrl = "http://192.168.1.198:5000/mode";
+// Flask server URL for mode (updated to new domain + port 8080)
+const char *serverUrl = "http://pebbles.immenseaccumulationonline.online:8080/mode";
 
-// SD card server details
+// SD card server details (unchanged)
 IPAddress sdServerIP(192, 168, 1, 250);
 const int sdServerPort = 8023;
 const long long sdStartAddr = 2048;
 
-// Quantum server details for QRNG mode
+// Quantum server details for QRNG mode (unchanged)
 IPAddress quantumServerIP(192, 168, 1, 238);
 const int quantumServerPort = 8003;
 
 // LED strip configuration
 #define NUM_LEDS 300
-#define DATA_PIN 2    // GPIO2
+#define DATA_PIN 2 // GPIO2
 #define BRIGHTNESS 50 // 0-255
 #define QUANTUM_BATCH_SIZE 2400
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUM_LEDS, DATA_PIN, NEO_GRB + NEO_KHZ800);
@@ -51,13 +51,11 @@ void setup()
     // Initialize Serial
     Serial.begin(115200);
     delay(100);
-
     // Initialize LED strip
     strip.begin();
     strip.setBrightness(BRIGHTNESS);
     setLedsOff();
     strip.show();
-
     // Connect to Wi-Fi
     Serial.println("Connecting to WiFi...");
     WiFi.begin(ssid, password);
@@ -90,7 +88,6 @@ void loop()
         }
         Serial.println("Reconnected to WiFi");
     }
-
     // Poll server for mode updates
     if (millis() - lastPoll >= pollInterval)
     {
@@ -116,7 +113,6 @@ void loop()
         }
         lastPoll = millis();
     }
-
     // Update LED pattern based on mode
     if (millis() - lastUpdate >= updateInterval)
     {
@@ -224,7 +220,6 @@ String getModeFromServer()
     String mode = "";
     http.setTimeout(5000); // 5s timeout
     int retries = 3;
-
     Serial.print("Attempting HTTP GET to: ");
     Serial.println(serverUrl);
     if (http.begin(client, serverUrl))
@@ -286,7 +281,6 @@ void hslToRgb(float h, float s, float l, uint8_t &r, uint8_t &g, uint8_t &b)
     float x = c * (1.0f - fabs(fmod(h / 60.0f, 2.0f) - 1.0f));
     float m = l - c / 2.0f;
     float r1, g1, b1;
-
     if (h >= 0 && h < 60)
     {
         r1 = c;
@@ -323,7 +317,6 @@ void hslToRgb(float h, float s, float l, uint8_t &r, uint8_t &g, uint8_t &b)
         g1 = 0;
         b1 = x;
     }
-
     r = (uint8_t)((r1 + m) * 255);
     g = (uint8_t)((g1 + m) * 255);
     b = (uint8_t)((b1 + m) * 255);
@@ -335,7 +328,6 @@ int readByteFromSD(long long addr) {
     client.setTimeout(5000); // Socket-level timeout in ms
     String host = sdServerIP.toString();
     int port = sdServerPort;
-
     // Attempt connection with timeout
     unsigned long connectStart = millis();
     if (!client.connect(host.c_str(), port)) {
@@ -345,13 +337,11 @@ int readByteFromSD(long long addr) {
         client.stop();
         return -1;
     }
-
     // Send GET request
     String url = "/read?addr=" + String(addr);
     client.print(String("GET ") + url + " HTTP/1.1\r\n" +
                  "Host: " + host + "\r\n" +
                  "Connection: close\r\n\r\n");
-
     // Read response with overall timeout
     unsigned long start = millis();
     String response = "";
@@ -361,7 +351,6 @@ int readByteFromSD(long long addr) {
             client.stop();
             return -1; // Timed out
         }
-
         if (client.available()) {
             char c = client.read();
             response += c;
@@ -379,9 +368,7 @@ int readByteFromSD(long long addr) {
             delay(10); // Yield to avoid tight loop
         }
     }
-
     client.stop();
-
     // Extract body (skip headers)
     int bodyStart = response.indexOf("\r\n\r\n") + 4;
     if (bodyStart > 3) {
@@ -394,17 +381,14 @@ int readByteFromSD(long long addr) {
 
 void sdClient() {
     static uint8_t sdData[900] = {0}; // Buffer for 300 LEDs * 3 bytes (RGB)
-
     Serial.println("Fetching 900 bytes from SD server...");
     int bytesFetched = 0;
     for (int i = 0; i < 900; i++) {
         long long addr = sdStartAddr + i;
-
         int tries = 0;
         int value = -1;
         while (tries < 10 && value == -1) {
             value = readByteFromSD(addr);
-
             printf("Byte: %d Read Value: %d\n", i, value);
             if (value != -1) {
                 sdData[i] = (uint8_t)value;
@@ -420,8 +404,7 @@ void sdClient() {
         delay(1);
     }
     Serial.printf("Fetched %d bytes from SD server\n", bytesFetched);
-    
-
+   
     // Set LEDs from buffered data
     for (int led = 0; led < NUM_LEDS; led++) {
         int idx = led * 3;
@@ -452,7 +435,6 @@ void quantumRandom()
                 quantumStatesAvailable = 0;
             }
         }
-
         // If enough bits are available, update all LEDs
         if (quantumStatesAvailable >= bitsNeeded)
         {
@@ -462,7 +444,6 @@ void quantumRandom()
                 int blackLed = (quantumCursor + i) % NUM_LEDS;
                 strip.setPixelColor(blackLed, strip.Color(0, 0, 0));
             }
-
             // Update all LEDs using quantum bits
             for (int i = 0; i < NUM_LEDS; i++)
             {
@@ -478,7 +459,7 @@ void quantumRandom()
                 // Map 8-bit value (0-255) to hue (0-360°)
                 float hue = (float)hueValue * 360.0f / 255.0f;
                 float saturation = 0.9f; // High saturation for vibrant colors
-                float lightness = 0.5f;  // Balanced lightness
+                float lightness = 0.5f; // Balanced lightness
                 uint8_t r, g, b;
                 hslToRgb(hue, saturation, lightness, r, g, b);
                 strip.setPixelColor(i, strip.Color(r, g, b));
@@ -497,17 +478,14 @@ int getQuantumStatesFromServer()
     WiFiClient client;
     HTTPClient http;
     String url = "http://" + quantumServerIP.toString() + ":" + String(quantumServerPort) + "/bits?count=" + String(QUANTUM_BATCH_SIZE);
-
     http.setTimeout(5000); // 5s timeout
     Serial.print("Attempting HTTP GET to: ");
     Serial.println(url);
-
     if (!http.begin(client, url))
     {
         Serial.println("Unable to connect to quantum server");
         return 0;
     }
-
     int httpCode = http.GET();
     if (httpCode != HTTP_CODE_OK)
     {
@@ -515,16 +493,13 @@ int getQuantumStatesFromServer()
         http.end();
         return 0;
     }
-
     String json = http.getString();
     http.end();
-
     if (json.length() == 0)
     {
         Serial.println("No response from quantum server");
         return 0;
     }
-
     // Parse JSON
     DynamicJsonDocument doc(2048);
     DeserializationError error = deserializeJson(doc, json);
@@ -533,7 +508,6 @@ int getQuantumStatesFromServer()
         Serial.printf("JSON parse error: %s\n", error.c_str());
         return 0;
     }
-
     JsonArray bits = doc["bits"].as<JsonArray>();
     int count = 0;
     for (JsonVariant v : bits)
@@ -553,7 +527,6 @@ void rainbowFlow() {
     static uint8_t sparkles[NUM_LEDS] = {0};
     static uint8_t sparkleColors[NUM_LEDS][3] = {{0}};
     static unsigned long lastUpdate = 0;
-
     unsigned long currentTime = millis();
     if (currentTime - lastUpdate >= random(15, 30))
     {
@@ -627,7 +600,6 @@ void proletariatCrackle()
 {
     static uint8_t intensities[NUM_LEDS] = {0};
     static unsigned long lastCrackle = 0;
-
     unsigned long currentTime = millis();
     if (currentTime - lastCrackle >= random(30, 100))
     {
@@ -652,7 +624,6 @@ void somaHaze()
     static uint16_t pinkOffset = 0;
     static uint16_t blueOffset = 0;
     static unsigned long lastMorph = 0;
-
     if (millis() - lastMorph >= 20)
     {
         for (int i = 0; i < NUM_LEDS; i++)
@@ -677,7 +648,6 @@ void loonieFreefall()
 {
     static uint8_t comets[10][3] = {0}; // pos, length, speed
     static unsigned long lastFall = 0;
-
     if (millis() - lastFall >= 25)
     {
         for (int i = 0; i < NUM_LEDS; i++)
@@ -688,9 +658,9 @@ void loonieFreefall()
         {
             if (comets[c][0] == 0 && random(100) < 8)
             {
-                comets[c][0] = 1;             // Start new comet
+                comets[c][0] = 1; // Start new comet
                 comets[c][1] = random(5, 15); // Length
-                comets[c][2] = random(2, 5);  // Speed
+                comets[c][2] = random(2, 5); // Speed
             }
             if (comets[c][0] > 0)
             {
@@ -722,7 +692,6 @@ void bokanovskyBurst()
     static int balls[8] = {0, 40, 80, 120, 160, 200, 240, 280};
     static int directions[8] = {2, -2, 3, -3, 2, -2, 4, -4};
     static unsigned long lastBounce = 0;
-
     if (millis() - lastBounce >= 20)
     {
         for (int i = 0; i < NUM_LEDS; i++)
@@ -771,7 +740,6 @@ void totalPerspectiveVortex()
 {
     static uint16_t marqueePos = 0;
     static unsigned long lastMarquee = 0;
-
     if (millis() - lastMarquee >= 15)
     {
         for (int i = 0; i < NUM_LEDS; i++)
@@ -801,7 +769,6 @@ void golgafrinchamDrift()
     static int cometSpeeds[8] = {1, 2, 1, 3, 2, 1, 4, 2};
     static int cometDirections[8] = {1, 1, 1, 1, 1, 1, 1, 1};
     static unsigned long lastSurge = 0;
-
     if (millis() - lastSurge >= 35)
     {
         for (int i = 0; i < NUM_LEDS; i++)
@@ -837,7 +804,6 @@ void bistromathicsSurge()
     static int ballDirections[5] = {1, -1, 1, -1, 1};
     static uint8_t intensities[NUM_LEDS] = {0};
     static unsigned long lastBounce = 0;
-
     if (millis() - lastBounce >= 25)
     {
         memset(intensities, 0, sizeof(intensities));
@@ -875,7 +841,6 @@ void groksDissolution()
     static uint8_t slings[4] = {0, 75, 150, 225};
     static int slingDirs[4] = {5, -4, 6, -5};
     static unsigned long lastSling = 0;
-
     if (millis() - lastSling >= 30)
     {
         for (int i = 0; i < NUM_LEDS; i++)
@@ -925,7 +890,6 @@ void newspeakShrink()
     static int rightPos = NUM_LEDS - 1;
     static bool converging = true;
     static unsigned long lastShrink = 0;
-
     if (millis() - lastShrink >= 30)
     {
         for (int i = 0; i < NUM_LEDS; i++)
@@ -977,7 +941,6 @@ void noliteTeBastardes()
     static int slingPositions[6] = {0, 50, 100, 150, 200, 250};
     static int slingSpeeds[6] = {4, -5, 6, -4, 5, -6};
     static unsigned long lastSling = 0;
-
     if (millis() - lastSling >= 25)
     {
         for (int i = 0; i < NUM_LEDS; i++)
@@ -1023,7 +986,6 @@ void infiniteImprobabilityDrive()
 {
     static uint16_t hue = 0;
     static unsigned long lastShift = 0;
-
     if (millis() - lastShift >= 20)
     {
         for (int i = 0; i < NUM_LEDS; i++)
@@ -1047,7 +1009,6 @@ void bigBrotherGlare()
 {
     static uint8_t eyes[NUM_LEDS] = {0};
     static unsigned long lastGlare = 0;
-
     if (millis() - lastGlare >= 50)
     {
         for (int i = 0; i < NUM_LEDS; i++)
@@ -1074,7 +1035,6 @@ void replicantRetirement()
     static int pulseCenters[5] = {0, 60, 120, 180, 240};
     static uint8_t pulseRadii[5] = {0};
     static unsigned long lastPulse = 0;
-
     if (millis() - lastPulse >= 25)
     {
         for (int i = 0; i < NUM_LEDS; i++)
@@ -1111,7 +1071,6 @@ void waterBrotherBond()
     static int balls[10] = {0};
     static int dirs[10] = {0};
     static unsigned long lastBounce = 0;
-
     if (millis() - lastBounce >= 20)
     {
         for (int i = 0; i < NUM_LEDS; i++)
@@ -1159,7 +1118,6 @@ void hypnopaediaHum()
 {
     static uint16_t marqueePos = 0;
     static unsigned long lastHum = 0;
-
     if (millis() - lastHum >= 40)
     {
         for (int i = 0; i < NUM_LEDS; i++)
@@ -1189,7 +1147,6 @@ void vogonPoetryPulse()
     static uint8_t ripples[NUM_LEDS] = {0};
     static int rippleCenters[4] = {0};
     static unsigned long lastRipple = 0;
-
     if (millis() - lastRipple >= 60)
     {
         for (int i = 0; i < NUM_LEDS; i++)
@@ -1226,7 +1183,6 @@ void thoughtPoliceFlash()
     static uint8_t flashes[NUM_LEDS] = {0};
     static uint8_t flameIntensities[20] = {0};
     static unsigned long lastFlash = 0;
-
     if (millis() - lastFlash >= 25)
     {
         for (int i = 0; i < NUM_LEDS; i++)
@@ -1267,7 +1223,6 @@ void electricSheepDream()
     static uint8_t rippleCenters[5] = {0};
     static uint8_t rippleRadii[5] = {0};
     static unsigned long lastRipple = 0;
-
     if (millis() - lastRipple >= 50)
     {
         for (int i = 0; i < NUM_LEDS; i++)
