@@ -3,7 +3,7 @@
 #include <WebSocketsServer.h>
 #include <Adafruit_VL53L0X.h>
 
-const char* ssid     = "BrubakerWifi";
+const char* ssid     = "BrubakerWifi2";
 const char* password = "Pre$ton01";
 
 #define HTTP_PORT  9067

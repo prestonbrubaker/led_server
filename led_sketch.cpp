@@ -5,28 +5,19 @@
 #include <math.h>
 #include <algorithm>
 #include <ArduinoJson.h>
+#include <cstring>
 
 // Wi-Fi credentials
 const char *ssid = "BrubakerWifi2";
 const char *password = "Pre$ton01";
 
-// Flask server URL for mode (updated to new domain + port 8080)
+// Flask server URL for mode
 const char *serverUrl = "http://pebbles.immenseaccumulationonline.online:8080/mode";
-
-// SD card server details (unchanged)
-IPAddress sdServerIP(192, 168, 1, 250);
-const int sdServerPort = 8023;
-const long long sdStartAddr = 2048;
-
-// Quantum server details for QRNG mode (unchanged)
-IPAddress quantumServerIP(192, 168, 1, 238);
-const int quantumServerPort = 8003;
 
 // LED strip configuration
 #define NUM_LEDS 300
 #define DATA_PIN 2 // GPIO2
 #define BRIGHTNESS 50 // 0-255
-#define QUANTUM_BATCH_SIZE 2400
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUM_LEDS, DATA_PIN, NEO_GRB + NEO_KHZ800);
 
 // Current mode and timing
@@ -36,26 +27,27 @@ const unsigned long pollInterval = 2000; // Poll every 2 seconds for mode
 unsigned long lastUpdate = 0;
 unsigned long updateInterval = 30; // Default ~33 FPS, adjustable per mode
 
-// QRNG mode variables
-int quantumCursor = 0;
-unsigned long quantumLastPoll = 0;
-const unsigned long quantumPollInterval = 1000;
-int quantumStates[QUANTUM_BATCH_SIZE] = {0};
-int quantumStateIndex = 0;
-int quantumStatesAvailable = 0;
-unsigned long quantumLastLedUpdate = 0;
-const unsigned long quantumLedInterval = 100;
+// Conquest mode globals (for random-conquest and red-green-conquest)
+uint32_t randomConquestColors[NUM_LEDS];
+bool randomConquestInitialized = false;
+bool randomConquestConverged = false;
+
+uint32_t redGreenConquestColors[NUM_LEDS];
+bool redGreenConquestInitialized = false;
+bool redGreenConquestConverged = false;
 
 void setup()
 {
     // Initialize Serial
     Serial.begin(115200);
     delay(100);
+
     // Initialize LED strip
     strip.begin();
     strip.setBrightness(BRIGHTNESS);
     setLedsOff();
     strip.show();
+
     // Connect to Wi-Fi
     Serial.println("Connecting to WiFi...");
     WiFi.begin(ssid, password);
@@ -88,6 +80,7 @@ void loop()
         }
         Serial.println("Reconnected to WiFi");
     }
+
     // Poll server for mode updates
     if (millis() - lastPoll >= pollInterval)
     {
@@ -98,13 +91,9 @@ void loop()
             Serial.println("New mode: " + currentMode);
             setLedsOff();
             resetModeState(); // Reset mode-specific state
-            if (currentMode == "QRNG")
+            if (currentMode == "random-conquest" || currentMode == "red-green-conquest")
             {
-                updateInterval = quantumLedInterval;
-                quantumCursor = 0;
-                quantumStateIndex = 0;
-                quantumStatesAvailable = 0;
-                quantumLastLedUpdate = 0;
+                updateInterval = 15; // Fast iterations for conquest modes
             }
             else
             {
@@ -113,6 +102,7 @@ void loop()
         }
         lastPoll = millis();
     }
+
     // Update LED pattern based on mode
     if (millis() - lastUpdate >= updateInterval)
     {
@@ -200,13 +190,13 @@ void loop()
         {
             electricSheepDream();
         }
-        else if (currentMode == "QRNG")
+        else if (currentMode == "random-conquest")
         {
-            quantumRandom();
+            randomConquest();
         }
-        else if (currentMode == "sd-client")
+        else if (currentMode == "red-green-conquest")
         {
-            sdClient();
+            redGreenConquest();
         }
         strip.show();
         lastUpdate = millis();
@@ -255,10 +245,11 @@ String getModeFromServer()
 void resetModeState() {
     static uint8_t dummyBuffer[NUM_LEDS] = {0};
     memcpy(dummyBuffer, dummyBuffer, NUM_LEDS);
-    quantumCursor = 0;
-    quantumStateIndex = 0;
-    quantumStatesAvailable = 0;
-    quantumLastLedUpdate = 0;
+    // Reset conquest mode states so re-entering a conquest mode restarts fresh
+    randomConquestInitialized = false;
+    randomConquestConverged = false;
+    redGreenConquestInitialized = false;
+    redGreenConquestConverged = false;
 }
 
 void setPixel(int pixel, byte red, byte green, byte blue)
@@ -322,205 +313,166 @@ void hslToRgb(float h, float s, float l, uint8_t &r, uint8_t &g, uint8_t &b)
     b = (uint8_t)((b1 + m) * 255);
 }
 
-// Function to read a single byte from the SD server
-int readByteFromSD(long long addr) {
-    WiFiClient client;
-    client.setTimeout(5000); // Socket-level timeout in ms
-    String host = sdServerIP.toString();
-    int port = sdServerPort;
-    // Attempt connection with timeout
-    unsigned long connectStart = millis();
-    if (!client.connect(host.c_str(), port)) {
-        return -1;
-    }
-    if (millis() - connectStart > 5000) {
-        client.stop();
-        return -1;
-    }
-    // Send GET request
-    String url = "/read?addr=" + String(addr);
-    client.print(String("GET ") + url + " HTTP/1.1\r\n" +
-                 "Host: " + host + "\r\n" +
-                 "Connection: close\r\n\r\n");
-    // Read response with overall timeout
-    unsigned long start = millis();
-    String response = "";
-    bool headersDone = false;
-    while (client.connected() || client.available()) {
-        if (millis() - start > 5000) {
-            client.stop();
-            return -1; // Timed out
-        }
-        if (client.available()) {
-            char c = client.read();
-            response += c;
-            if (response.endsWith("\r\n\r\n")) {
-                headersDone = true;
-            }
-            if (headersDone) {
-                // Continue collecting body (assuming small response)
-                while (client.available()) {
-                    response += (char)client.read();
-                }
-                break;
-            }
-        } else {
-            delay(10); // Yield to avoid tight loop
-        }
-    }
-    client.stop();
-    // Extract body (skip headers)
-    int bodyStart = response.indexOf("\r\n\r\n") + 4;
-    if (bodyStart > 3) {
-        String body = response.substring(bodyStart);
-        body.trim();
-        return body.toInt();
-    }
-    return -1; // No valid body
-}
-
-void sdClient() {
-    static uint8_t sdData[900] = {0}; // Buffer for 300 LEDs * 3 bytes (RGB)
-    Serial.println("Fetching 900 bytes from SD server...");
-    int bytesFetched = 0;
-    for (int i = 0; i < 900; i++) {
-        long long addr = sdStartAddr + i;
-        int tries = 0;
-        int value = -1;
-        while (tries < 10 && value == -1) {
-            value = readByteFromSD(addr);
-            printf("Byte: %d Read Value: %d\n", i, value);
-            if (value != -1) {
-                sdData[i] = (uint8_t)value;
-                bytesFetched++;
-            } else {
-                sdData[i] = 0; // Fallback to black on error
-                Serial.printf("Error reading addr %lld on attempt %d\n", addr, tries);
-                delay(500);
-            }
-            tries++;
-        }
-        // Optional: Add small delay to avoid overwhelming the server/network
-        delay(1);
-    }
-    Serial.printf("Fetched %d bytes from SD server\n", bytesFetched);
-   
-    // Set LEDs from buffered data
-    for (int led = 0; led < NUM_LEDS; led++) {
-        int idx = led * 3;
-        uint8_t r = sdData[idx];
-        uint8_t g = sdData[idx + 1];
-        uint8_t b = sdData[idx + 2];
-        strip.setPixelColor(led, strip.Color(r, g, b));
-    }
-}
-
-void quantumRandom()
+void randomConquest()
 {
-    // Update LEDs only if enough time has passed
-    if (millis() - quantumLastLedUpdate >= quantumLedInterval)
+    if (!randomConquestInitialized)
     {
-        // Need 8 bits per LED for hue (300 LEDs * 8 = 2400 bits per full update)
-        int bitsNeeded = NUM_LEDS * 8;
-        if (quantumStatesAvailable < bitsNeeded && millis() - quantumLastPoll >= quantumPollInterval)
+        // Unique seed using hardware ID + analog noise - never repeats across devices or power cycles in practice
+        randomSeed(ESP.getChipId() ^ (uint32_t)analogRead(A0));
+        for (int i = 0; i < NUM_LEDS; i++)
         {
-            quantumStatesAvailable = getQuantumStatesFromServer();
-            quantumStateIndex = 0;
-            quantumLastPoll = millis();
-            if (quantumStatesAvailable < bitsNeeded)
-            {
-                // Fallback: Set all LEDs to black
-                setLedsOff();
-                Serial.println("Insufficient quantum bits, setting LEDs to black");
-                quantumStatesAvailable = 0;
-            }
+            uint8_t r = random(0, 60);  // Ensure reasonably bright colors
+            uint8_t g = random(0, 60);
+            uint8_t b = random(0, 60);
+            randomConquestColors[i] = strip.Color(r, g, b);
         }
-        // If enough bits are available, update all LEDs
-        if (quantumStatesAvailable >= bitsNeeded)
+        randomConquestInitialized = true;
+        randomConquestConverged = false;
+    }
+
+    if (randomConquestConverged)
+    {
+        for (int i = 0; i < NUM_LEDS; i++)
         {
-            // Set three LEDs ahead of cursor to black for trailing effect
-            for (int i = 1; i <= 3; i++)
-            {
-                int blackLed = (quantumCursor + i) % NUM_LEDS;
-                strip.setPixelColor(blackLed, strip.Color(0, 0, 0));
-            }
-            // Update all LEDs using quantum bits
-            for (int i = 0; i < NUM_LEDS; i++)
-            {
-                int offset = quantumStateIndex + i * 8;
-                int hueValue = 0;
-                for (int j = 0; j < 8; j++)
-                {
-                    if (offset + j < quantumStatesAvailable)
-                    {
-                        hueValue += quantumStates[offset + j] * (1 << j);
-                    }
-                }
-                // Map 8-bit value (0-255) to hue (0-360°)
-                float hue = (float)hueValue * 360.0f / 255.0f;
-                float saturation = 0.9f; // High saturation for vibrant colors
-                float lightness = 0.5f; // Balanced lightness
-                uint8_t r, g, b;
-                hslToRgb(hue, saturation, lightness, r, g, b);
-                strip.setPixelColor(i, strip.Color(r, g, b));
-            }
-            quantumCursor = (quantumCursor + 1) % NUM_LEDS; // Maintain cursor for trailing effect
-            quantumStateIndex += bitsNeeded;
-            quantumStatesAvailable -= bitsNeeded;
-            quantumLastLedUpdate = millis();
-            Serial.printf("Updated %d LEDs with quantum bits, remaining: %d\n", NUM_LEDS, quantumStatesAvailable);
+            strip.setPixelColor(i, randomConquestColors[i]);
         }
+        return;
+    }
+
+    // Check if all LEDs are the same color (converged)
+    bool allSame = true;
+    uint32_t refColor = randomConquestColors[0];
+    for (int i = 1; i < NUM_LEDS; i++)
+    {
+        if (randomConquestColors[i] != refColor)
+        {
+            allSame = false;
+            break;
+        }
+    }
+    if (allSame)
+    {
+        randomConquestConverged = true;
+        for (int i = 0; i < NUM_LEDS; i++)
+        {
+            strip.setPixelColor(i, refColor);
+        }
+        return;
+    }
+
+    // Advance one iteration: each LED has a low chance (~6%) to take over each neighbor
+    uint32_t newColors[NUM_LEDS];
+    for (int i = 0; i < NUM_LEDS; i++)
+    {
+        newColors[i] = randomConquestColors[i];
+    }
+
+    for (int i = 0; i < NUM_LEDS; i++)
+    {
+        if (i > 0 && random(100) < 6)  // Low chance to conquer left neighbor
+        {
+            newColors[i - 1] = randomConquestColors[i];
+        }
+        if (i < NUM_LEDS - 1 && random(100) < 6)  // Low chance to conquer right neighbor
+        {
+            newColors[i + 1] = randomConquestColors[i];
+        }
+    }
+
+    // Commit new state
+    for (int i = 0; i < NUM_LEDS; i++)
+    {
+        randomConquestColors[i] = newColors[i];
+        strip.setPixelColor(i, randomConquestColors[i]);
     }
 }
 
-int getQuantumStatesFromServer()
+void redGreenConquest()
 {
-    WiFiClient client;
-    HTTPClient http;
-    String url = "http://" + quantumServerIP.toString() + ":" + String(quantumServerPort) + "/bits?count=" + String(QUANTUM_BATCH_SIZE);
-    http.setTimeout(5000); // 5s timeout
-    Serial.print("Attempting HTTP GET to: ");
-    Serial.println(url);
-    if (!http.begin(client, url))
+    if (!redGreenConquestInitialized)
     {
-        Serial.println("Unable to connect to quantum server");
-        return 0;
-    }
-    int httpCode = http.GET();
-    if (httpCode != HTTP_CODE_OK)
-    {
-        Serial.printf("HTTP GET failed, error: %s\n", http.errorToString(httpCode).c_str());
-        http.end();
-        return 0;
-    }
-    String json = http.getString();
-    http.end();
-    if (json.length() == 0)
-    {
-        Serial.println("No response from quantum server");
-        return 0;
-    }
-    // Parse JSON
-    DynamicJsonDocument doc(2048);
-    DeserializationError error = deserializeJson(doc, json);
-    if (error)
-    {
-        Serial.printf("JSON parse error: %s\n", error.c_str());
-        return 0;
-    }
-    JsonArray bits = doc["bits"].as<JsonArray>();
-    int count = 0;
-    for (JsonVariant v : bits)
-    {
-        if (count < QUANTUM_BATCH_SIZE)
+        // Unique seed (different base for variety)
+        randomSeed(ESP.getChipId() ^ (uint32_t)analogRead(A0) ^ 0xDEADBEEF);
+        for (int i = 0; i < NUM_LEDS; i++)
         {
-            quantumStates[count] = v.as<int>();
-            count++;
+            if (random(100) < 50)
+            {
+                // First half: random shades of red
+                uint8_t r = 0;
+                uint8_t g = 0;
+                uint8_t b = random(5, 80);
+                redGreenConquestColors[i] = strip.Color(r, g, b);
+            }
+            else
+            {
+                // Second half: random shades of green
+                uint8_t r = 0;
+                uint8_t g = random(5, 80);
+                uint8_t b = 0;
+                redGreenConquestColors[i] = strip.Color(r, g, b);
+            }
+        }
+        redGreenConquestInitialized = true;
+        redGreenConquestConverged = false;
+    }
+
+    if (redGreenConquestConverged)
+    {
+        for (int i = 0; i < NUM_LEDS; i++)
+        {
+            strip.setPixelColor(i, redGreenConquestColors[i]);
+        }
+        return;
+    }
+
+    // Check if all LEDs are the same color (converged to red or green)
+    bool allSame = true;
+    uint32_t refColor = redGreenConquestColors[0];
+    for (int i = 1; i < NUM_LEDS; i++)
+    {
+        if (redGreenConquestColors[i] != refColor)
+        {
+            allSame = false;
+            break;
         }
     }
-    Serial.printf("Received %d quantum bits\n", count);
-    return count;
+    if (allSame)
+    {
+        redGreenConquestConverged = true;
+        for (int i = 0; i < NUM_LEDS; i++)
+        {
+            strip.setPixelColor(i, refColor);
+        }
+        return;
+    }
+
+    // Advance one iteration: each LED has a low chance (~6%) to take over each neighbor
+    uint32_t newColors[NUM_LEDS];
+    for (int i = 0; i < NUM_LEDS; i++)
+    {
+        newColors[i] = redGreenConquestColors[i];
+    }
+
+    for (int i = 0; i < NUM_LEDS; i++)
+    {
+        if (i > 0 && random(100) < 6)  // Low chance to conquer left neighbor
+        {
+            newColors[i - 1] = redGreenConquestColors[i];
+        }
+        if (i < NUM_LEDS - 1 && random(100) < 6)  // Low chance to conquer right neighbor
+        {
+            newColors[i + 1] = redGreenConquestColors[i];
+        }
+    }
+
+    // Commit new state
+    for (int i = 0; i < NUM_LEDS; i++)
+    {
+        redGreenConquestColors[i] = newColors[i];
+        strip.setPixelColor(i, redGreenConquestColors[i]);
+    }
 }
+
 
 void rainbowFlow() {
     static uint16_t hue = 0;

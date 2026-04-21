@@ -7,7 +7,6 @@ app = Flask(__name__)
 # File to store the JSON data
 json_file_path = 'data.json'
 
-# List of valid modes (matched to ESP8266 code)
 VALID_MODES = [
     'off',
     'rainbow-flow',
@@ -30,8 +29,8 @@ VALID_MODES = [
     'vogon-poetry-pulse',
     'thought-police-flash',
     'electric-sheep-dream',
-    'QRNG',
-    'sd-client'
+    'random-conquest',
+    'red-green-conquest'
 ]
 
 # Function to read the mode from the JSON file
@@ -39,14 +38,13 @@ def read_json():
     if not os.path.exists(json_file_path):
         write_json({"mode": "off"})
         return {"mode": "off"}
-    
     try:
         with open(json_file_path, 'r') as f:
             data = json.load(f)
-            if 'mode' not in data or data['mode'] not in VALID_MODES:
-                data['mode'] = 'off'
-                write_json(data)
-            return data
+        if 'mode' not in data or data['mode'] not in VALID_MODES:
+            data['mode'] = 'off'
+            write_json(data)
+        return data
     except json.JSONDecodeError:
         print("Error decoding JSON data. Recreating with default mode.")
         write_json({"mode": "off"})
