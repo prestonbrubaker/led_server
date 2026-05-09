@@ -10,7 +10,7 @@ app = Flask(__name__)
 brightness = 0
 willez_mode = True
 willez_on_time = "06:15"   # default Auto ON time (Central Time)
-willez_off_time = "21:00"  # default Auto OFF time (Central Time)
+willez_off_time = "21:30"  # default Auto OFF time (Central Time)
 
 @app.route('/getbrightness')
 def get_brightness():
