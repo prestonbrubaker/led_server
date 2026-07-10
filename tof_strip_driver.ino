@@ -6,7 +6,8 @@
 const char* ssid = "BrubakerWifi2";
 const char* password = "Pre$ton01";
 
-// NEW: Central server via Cloudflare Tunnel (your desktop)
+// Central server via Cloudflare Tunnel (your desktop)
+// Using split host/path (more reliable on ESP-01)
 const char* sensorUrl = "http://willohwilloh.immenseaccumulationonline.online/distance";
 
 #define NUM_LEDS 300
@@ -24,6 +25,13 @@ unsigned long lastTriggerTime = 0;
 const unsigned long holdTimeMs = 20000; // 20 seconds keep-alive
 
 int currentDistance = 9999; // last valid reading
+
+// === CONFIGURABLE CUT OFF ===
+const int DISTANCE_CUTOFF = 600;        // was 900 — change this value only
+
+// === RESILIENCE / WATCHDOG ===
+int consecutiveFailures = 0;
+const int maxConsecutiveFailures = 50;  // ~12.5 seconds of failures → auto restart ESP-01
 
 void setup() {
   Serial.begin(115200);
@@ -48,7 +56,19 @@ void loop() {
 
   int dist = getDistance();
 
-  if (dist > 0 && dist < 900) {
+  // === RESILIENCE: track consecutive failures and auto-restart if stuck ===
+  if (dist < 0) {
+    consecutiveFailures++;
+    if (consecutiveFailures > maxConsecutiveFailures) {
+      Serial.println("⚠️  Too many failures — restarting ESP-01...");
+      delay(200);
+      ESP.restart();
+    }
+  } else {
+    consecutiveFailures = 0;   // good reading — reset counter
+  }
+
+  if (dist > 0 && dist < DISTANCE_CUTOFF) {
     // Person detected — update color immediately and reset timer
     currentDistance = dist;
     lastTriggerTime = millis();
@@ -75,7 +95,7 @@ void loop() {
 }
 
 // Returns distance in mm or -1 on error
-// Uses split host/path form (much more reliable on ESP-01/ESP8266)
+// Split host/path form (more reliable on ESP-01)
 int getDistance() {
   if (WiFi.status() != WL_CONNECTED) return -1;
 
@@ -113,17 +133,17 @@ int getDistance() {
   return -1;
 }
 
-// Map 0…900 mm → 0…360° hue (red → purple)
+// Map 0…DISTANCE_CUTOFF mm → 0…360° hue (red → purple)
 void setRainbowColor(int mm) {
-  uint16_t hue = map(constrain(mm, 0, 900), 0, 900, 0, 360);
-  hue = (hue * 300L) / 360; // compress so 900 mm = nice purple
+  uint16_t hue = map(constrain(mm, 0, DISTANCE_CUTOFF), 0, DISTANCE_CUTOFF, 0, 360);
+  hue = (hue * 300L) / 360; // compress so DISTANCE_CUTOFF mm = nice purple
   uint32_t color = strip.ColorHSV(hue * 182, 255, 255); // 182 ≈ 65536/360
   strip.fill(color);
   strip.show();
 }
 
 void printColorName(int mm) {
-  int h = map(constrain(mm, 0, 900), 0, 900, 0, 300);
+  int h = map(constrain(mm, 0, DISTANCE_CUTOFF), 0, DISTANCE_CUTOFF, 0, 300);
   if (h < 30) Serial.println("RED");
   else if (h < 80) Serial.println("ORANGE → YELLOW");
   else if (h < 150) Serial.println("GREEN → CYAN");
