@@ -157,7 +157,6 @@
                     if (data.message) {
                         document.getElementById('current-mode').textContent = 
                             mode.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                        alert(`Mode set to ${mode.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}! Don't forget your towel!`);
                     } else {
                         errorMessage.textContent = data.error || 'Something\'s gone terribly wrong!';
                         errorMessage.style.display = 'block';

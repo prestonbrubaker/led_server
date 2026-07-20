@@ -78,4 +78,5 @@ def index():
     return render_template('index.html', mode=data['mode'], valid_modes=VALID_MODES)
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # debug=False: avoid the reloader (extra process / dropped connections) for long-running ESP clients
+    app.run(debug=False, host='0.0.0.0', port=5000, threaded=True)

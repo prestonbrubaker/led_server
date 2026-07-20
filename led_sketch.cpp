@@ -4,7 +4,6 @@
 #include <Adafruit_NeoPixel.h>
 #include <math.h>
 #include <algorithm>
-#include <ArduinoJson.h>
 #include <cstring>
 
 // Wi-Fi credentials
@@ -20,90 +19,188 @@ const char *serverUrl = "http://pebbles.immenseaccumulationonline.online:8080/mo
 #define BRIGHTNESS 50 // 0-255
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUM_LEDS, DATA_PIN, NEO_GRB + NEO_KHZ800);
 
+// Timing
+const unsigned long pollInterval = 2000;   // Poll every 2 seconds for mode
+const unsigned long httpTimeoutMs = 2500;  // Keep HTTP short so LEDs stay responsive
+const unsigned long wifiConnectTimeoutMs = 15000;
+const unsigned long wifiReconnectIntervalMs = 5000;  // spacing between non-blocking reconnect tries
+const unsigned long wifiOfflineRestartMs = 45000;    // hard reset if offline this long
+
+// After this many consecutive failures, hard-reset the chip (recovery from hung WiFi/HTTP stacks)
+const uint8_t maxConsecutiveHttpFailures = 8;  // ~16s of bad polls
+
 // Current mode and timing
 String currentMode = "off";
 unsigned long lastPoll = 0;
-const unsigned long pollInterval = 2000; // Poll every 2 seconds for mode
 unsigned long lastUpdate = 0;
 unsigned long updateInterval = 30; // Default ~33 FPS, adjustable per mode
+unsigned long lastWifiReconnectAttempt = 0;
+unsigned long wifiOfflineSince = 0; // 0 = currently online
+
+uint8_t consecutiveHttpFailures = 0;
 
 // Conquest mode globals (for random-conquest and red-green-conquest)
+// Buffers live in BSS, never on the tiny ESP-01 stack
 uint32_t randomConquestColors[NUM_LEDS];
+uint32_t randomConquestNewColors[NUM_LEDS];
 bool randomConquestInitialized = false;
 bool randomConquestConverged = false;
 
 uint32_t redGreenConquestColors[NUM_LEDS];
+uint32_t redGreenConquestNewColors[NUM_LEDS];
 bool redGreenConquestInitialized = false;
 bool redGreenConquestConverged = false;
 
+// Forward declarations
+void setLedsOff();
+void setLedsRed();
+void resetModeState();
+String getModeFromServer();
+void safeRestart(const char *reason);
+bool ensureWiFi();
+void feedWatchdog();
+
+void feedWatchdog()
+{
+    yield();
+    ESP.wdtFeed();
+}
+
+void safeRestart(const char *reason)
+{
+    Serial.print(F("Restarting: "));
+    Serial.println(reason);
+    Serial.flush();
+    // Brief visual cue that a reset is about to happen
+    for (int i = 0; i < NUM_LEDS; i++)
+    {
+        strip.setPixelColor(i, strip.Color(0, 0, 0));
+    }
+    strip.show();
+    delay(100);
+    ESP.restart();
+    // If restart returns (should not), hang until hardware WDT fires
+    while (true)
+    {
+        delay(1000);
+    }
+}
+
+// Non-blocking WiFi maintenance. Returns true when associated.
+// Kicks off reconnects at most every wifiReconnectIntervalMs so LED frames keep running.
+// Restarts the chip if offline longer than wifiOfflineRestartMs.
+bool ensureWiFi()
+{
+    if (WiFi.status() == WL_CONNECTED)
+    {
+        if (wifiOfflineSince != 0)
+        {
+            Serial.print(F("WiFi OK, IP: "));
+            Serial.println(WiFi.localIP());
+        }
+        wifiOfflineSince = 0;
+        return true;
+    }
+
+    unsigned long now = millis();
+    if (wifiOfflineSince == 0)
+    {
+        wifiOfflineSince = now;
+        Serial.println(F("WiFi disconnected"));
+    }
+
+    if ((now - wifiOfflineSince) >= wifiOfflineRestartMs)
+    {
+        safeRestart("WiFi offline too long");
+    }
+
+    // Rate-limit reconnect kicks so we never stall the animation loop
+    if ((now - lastWifiReconnectAttempt) >= wifiReconnectIntervalMs)
+    {
+        lastWifiReconnectAttempt = now;
+        Serial.println(F("WiFi reconnect kick..."));
+        WiFi.disconnect();
+        feedWatchdog();
+        WiFi.mode(WIFI_STA);
+        WiFi.setAutoReconnect(true);
+        WiFi.persistent(false);
+        WiFi.begin(ssid, password);
+    }
+
+    feedWatchdog();
+    return (WiFi.status() == WL_CONNECTED);
+}
+
 void setup()
 {
-    // Initialize Serial
+    // Software watchdog (~8s): if the main loop wedges without feeding, reset
+    ESP.wdtEnable(8000);
+
     Serial.begin(115200);
     delay(100);
+    Serial.println();
+    Serial.println(F("LED strip client boot"));
 
-    // Initialize LED strip
     strip.begin();
     strip.setBrightness(BRIGHTNESS);
     setLedsOff();
     strip.show();
 
-    // Connect to Wi-Fi
-    Serial.println("Connecting to WiFi...");
+    WiFi.mode(WIFI_STA);
+    WiFi.setSleepMode(WIFI_NONE_SLEEP); // more stable long-running polls
+    WiFi.setAutoReconnect(true);
+    WiFi.persistent(false);
+
+    Serial.println(F("Connecting to WiFi..."));
     WiFi.begin(ssid, password);
+    unsigned long start = millis();
     while (WiFi.status() != WL_CONNECTED)
     {
-        delay(1000);
-        Serial.println("Connecting to WiFi...");
+        feedWatchdog();
+        delay(250);
+        if ((millis() - start) > wifiConnectTimeoutMs)
+        {
+            safeRestart("Initial WiFi connect timeout");
+        }
     }
-    Serial.println("Connected to WiFi");
-    Serial.println("IP address: " + WiFi.localIP().toString());
+    Serial.print(F("Connected, IP: "));
+    Serial.println(WiFi.localIP());
+
+    lastPoll = 0; // poll immediately on first loop
+    lastUpdate = 0;
 }
 
 void loop()
 {
-    if (WiFi.status() != WL_CONNECTED)
-    {
-        Serial.println("WiFi disconnected, reconnecting...");
-        WiFi.begin(ssid, password);
-        int retries = 10;
-        while (WiFi.status() != WL_CONNECTED && retries > 0)
-        {
-            delay(1000);
-            Serial.println("Reconnecting...");
-            retries--;
-        }
-        if (WiFi.status() != WL_CONNECTED)
-        {
-            Serial.println("Reconnection failed");
-            return;
-        }
-        Serial.println("Reconnected to WiFi");
-    }
+    feedWatchdog();
 
-    // Poll server for mode updates
-    if (millis() - lastPoll >= pollInterval)
+    // Keep WiFi up (non-blocking). Restarts after prolonged offline; LEDs always continue.
+    const bool wifiOk = ensureWiFi();
+
+    // Poll server for mode updates (single short attempt; restart after streak of failures)
+    if (wifiOk && (millis() - lastPoll >= pollInterval))
     {
+        lastPoll = millis();
         String newMode = getModeFromServer();
-        if (newMode != "" && newMode != currentMode)
+        if (newMode.length() > 0 && newMode != currentMode)
         {
             currentMode = newMode;
-            Serial.println("New mode: " + currentMode);
+            Serial.print(F("New mode: "));
+            Serial.println(currentMode);
             setLedsOff();
-            resetModeState(); // Reset mode-specific state
+            resetModeState();
             if (currentMode == "random-conquest" || currentMode == "red-green-conquest")
             {
-                updateInterval = 15; // Fast iterations for conquest modes
+                updateInterval = 15;
             }
             else
             {
-                updateInterval = 30; // Default for other modes
+                updateInterval = 30;
             }
         }
-        lastPoll = millis();
     }
 
-    // Update LED pattern based on mode
+    // Update LED pattern based on mode (always — never block animation on network)
     if (millis() - lastUpdate >= updateInterval)
     {
         if (currentMode == "rainbow-flow")
@@ -200,51 +297,81 @@ void loop()
         }
         strip.show();
         lastUpdate = millis();
+        feedWatchdog();
     }
 }
 
+// Single short HTTP GET. On success returns trimmed mode string; on failure "".
+// After maxConsecutiveHttpFailures, restarts the chip so a wedged TCP/DNS stack recovers.
 String getModeFromServer()
 {
+    String mode = "";
     WiFiClient client;
     HTTPClient http;
-    String mode = "";
-    http.setTimeout(5000); // 5s timeout
-    int retries = 3;
-    Serial.print("Attempting HTTP GET to: ");
+
+    http.setTimeout(httpTimeoutMs);
+    http.setReuse(false); // avoid stale keep-alive sockets on ESP8266
+
+    Serial.print(F("HTTP GET "));
     Serial.println(serverUrl);
-    if (http.begin(client, serverUrl))
+
+    bool began = http.begin(client, serverUrl);
+    if (!began)
     {
-        while (retries > 0)
-        {
-            int httpCode = http.GET();
-            Serial.print("HTTP Code: ");
-            Serial.println(httpCode);
-            if (httpCode == HTTP_CODE_OK)
-            {
-                mode = http.getString();
-                mode.trim();
-                Serial.println("Received mode: " + mode);
-                break;
-            }
-            else
-            {
-                Serial.printf("HTTP GET failed, error: %s\n", http.errorToString(httpCode).c_str());
-                retries--;
-                delay(1000);
-            }
-        }
+        Serial.println(F("http.begin failed"));
         http.end();
+        consecutiveHttpFailures++;
     }
     else
     {
-        Serial.println("Unable to connect to server");
+        feedWatchdog();
+        int httpCode = http.GET();
+        Serial.print(F("HTTP Code: "));
+        Serial.println(httpCode);
+
+        if (httpCode == HTTP_CODE_OK)
+        {
+            mode = http.getString();
+            mode.trim();
+            // Guard against absurd payloads that would bloat heap
+            if (mode.length() > 64)
+            {
+                mode = mode.substring(0, 64);
+                mode.trim();
+            }
+            Serial.print(F("Received mode: "));
+            Serial.println(mode);
+            consecutiveHttpFailures = 0;
+        }
+        else
+        {
+            if (httpCode < 0)
+            {
+                Serial.printf("HTTP error: %s\n", http.errorToString(httpCode).c_str());
+            }
+            consecutiveHttpFailures++;
+        }
+        http.end();
     }
+
+    client.stop();
+    feedWatchdog();
+
+    if (mode.length() == 0)
+    {
+        Serial.printf("HTTP failures: %u/%u\n",
+                      consecutiveHttpFailures, maxConsecutiveHttpFailures);
+        if (consecutiveHttpFailures >= maxConsecutiveHttpFailures)
+        {
+            safeRestart("HTTP poll failures exhausted");
+        }
+    }
+
     return mode;
 }
 
-void resetModeState() {
-    static uint8_t dummyBuffer[NUM_LEDS] = {0};
-    memcpy(dummyBuffer, dummyBuffer, NUM_LEDS);
+void resetModeState()
+{
     // Reset conquest mode states so re-entering a conquest mode restarts fresh
     randomConquestInitialized = false;
     randomConquestConverged = false;
@@ -361,28 +488,32 @@ void randomConquest()
     }
 
     // Advance one iteration: each LED has a low chance (~6%) to take over each neighbor
-    uint32_t newColors[NUM_LEDS];
+    // Use BSS buffer — stack cannot hold 300 * 4 bytes on ESP-01
     for (int i = 0; i < NUM_LEDS; i++)
     {
-        newColors[i] = randomConquestColors[i];
+        randomConquestNewColors[i] = randomConquestColors[i];
     }
 
     for (int i = 0; i < NUM_LEDS; i++)
     {
         if (i > 0 && random(100) < 6)  // Low chance to conquer left neighbor
         {
-            newColors[i - 1] = randomConquestColors[i];
+            randomConquestNewColors[i - 1] = randomConquestColors[i];
         }
         if (i < NUM_LEDS - 1 && random(100) < 6)  // Low chance to conquer right neighbor
         {
-            newColors[i + 1] = randomConquestColors[i];
+            randomConquestNewColors[i + 1] = randomConquestColors[i];
+        }
+        if ((i & 31) == 0)
+        {
+            feedWatchdog();
         }
     }
 
     // Commit new state
     for (int i = 0; i < NUM_LEDS; i++)
     {
-        randomConquestColors[i] = newColors[i];
+        randomConquestColors[i] = randomConquestNewColors[i];
         strip.setPixelColor(i, randomConquestColors[i]);
     }
 }
@@ -447,28 +578,32 @@ void redGreenConquest()
     }
 
     // Advance one iteration: each LED has a low chance (~6%) to take over each neighbor
-    uint32_t newColors[NUM_LEDS];
+    // Use BSS buffer — stack cannot hold 300 * 4 bytes on ESP-01
     for (int i = 0; i < NUM_LEDS; i++)
     {
-        newColors[i] = redGreenConquestColors[i];
+        redGreenConquestNewColors[i] = redGreenConquestColors[i];
     }
 
     for (int i = 0; i < NUM_LEDS; i++)
     {
         if (i > 0 && random(100) < 6)  // Low chance to conquer left neighbor
         {
-            newColors[i - 1] = redGreenConquestColors[i];
+            redGreenConquestNewColors[i - 1] = redGreenConquestColors[i];
         }
         if (i < NUM_LEDS - 1 && random(100) < 6)  // Low chance to conquer right neighbor
         {
-            newColors[i + 1] = redGreenConquestColors[i];
+            redGreenConquestNewColors[i + 1] = redGreenConquestColors[i];
+        }
+        if ((i & 31) == 0)
+        {
+            feedWatchdog();
         }
     }
 
     // Commit new state
     for (int i = 0; i < NUM_LEDS; i++)
     {
-        redGreenConquestColors[i] = newColors[i];
+        redGreenConquestColors[i] = redGreenConquestNewColors[i];
         strip.setPixelColor(i, redGreenConquestColors[i]);
     }
 }
